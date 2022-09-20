@@ -8,15 +8,51 @@ const SYMBYTES: usize = 32;
 
 // TODO: replace hardcoded values by expressions
 
+
+/*
+ * Key generation wrapper
+ */
+pub fn keygen(seed: [u8; SYMBYTES]) {
+    kg(seed);
+}
+
+/*
+ * Key derivation wrapper to deserialize the vectors of polynomials
+ */
+pub fn skey_deriv(pkp: [u8; POLYVEC_BYTES], skp: [u8; 2*POLYVEC_BYTES], seed: [u8; SYMBYTES]) {
+    let pk: PolyVec = polyvec_frombytes(&pkp);
+    let mut s: PolyVec = polyvec_frombytes(skp[..POLYVEC_BYTES].try_into().unwrap());
+    let mut e: PolyVec = polyvec_frombytes(skp[POLYVEC_BYTES..].try_into().unwrap());
+
+    sdk(pk, (s,e), seed);
+}
+
+/*
+ * Generate secret and error vectors and compute public key
+ */
+fn kg(seed: [u8; SYMBYTES]) {
+    let mut nonce: u8 = 0;
+    let a: [PolyVec; N] = genmatrix(seed, nonce);
+
+    nonce += 1;
+    let mut s: PolyVec = getnoise(seed, nonce);
+
+    nonce += 1;
+    let mut e: PolyVec = getnoise(seed, nonce);
+
+    let pk: PolyVec = gen_pk(&a, &mut s, &mut e);
+}
+
+
 /*
  * Shared key derivation
  */
-fn sdk(pk: PolyVec, sk: (PolyVec, PolyVec), seed: [u8; SYMBYTES]) {
-    let s: PolyVec = sk.0;
-    let e: PolyVec = sk.1;
+fn sdk(pk: PolyVec, mut sk: (PolyVec, PolyVec), seed: [u8; 32]) {
+    let mut s: PolyVec = sk.0;
+    let mut e: PolyVec = sk.1;
     let a: [PolyVec; N] = genmatrix(seed, 0);
 
-    let pk2: PolyVec = gen_pk(&a, &s, &e);
+    let pk2: PolyVec = gen_pk(&a, &mut s, &mut e);
     let mut r_in: [u8; POLYVEC_BYTES * 2] = [0; POLYVEC_BYTES * 2];
 
     r_in[0..POLYVEC_BYTES].copy_from_slice(&polyvec_tobytes(pk));
@@ -42,8 +78,12 @@ fn rec(k: &mut Poly) {
 /*
  * Generates a public key from matrix A, secret and error vector
  */
-fn gen_pk(a: &[PolyVec; N], s: &PolyVec, e: &PolyVec) -> PolyVec {
+fn gen_pk(a: &[PolyVec; N], s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
     let mut tmp = polyvec_init();
+
+    let s = polyvec_ntt(s);
+    let e = polyvec_ntt(e);
+
     // A * s + e
     for i in 0..N {
         tmp[i] = polyvec_basemul_acc(a[i], *s);
@@ -99,8 +139,8 @@ fn rej_sampling(buf: &[u8; RATE], p: &mut Poly, mut offset: usize) -> usize {
     let mut c: usize = 0;
     let mut tElem: Elem = [0, 0, 0];
 
-    while(c < RATE-24) {
-        tElem = elem_frombytes(buf[c..c+24].try_into().unwrap());
+    while(c < RATE-18) {
+        tElem = elem_frombytes(buf[c..c+18].try_into().unwrap());
         //TODO: not CT!!!!
         if cmp(tElem, Q) < 0 {
             p[offset] = tElem;

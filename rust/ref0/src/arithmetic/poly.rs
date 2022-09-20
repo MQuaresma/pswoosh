@@ -52,6 +52,19 @@ pub fn poly_basemul(a: Poly, b: Poly) -> Poly {
 }
 
 /*
+ * Deserializes polynomial
+ */
+pub fn poly_frombytes(rp: &[u8; POLY_BYTES]) -> Poly {
+    let mut p: Poly = init();
+
+    for i in 0..d {
+        p[i] = elem_frombytes(rp[ELEM_BYTES*i..ELEM_BYTES*i+ELEM_BYTES].try_into().unwrap());
+    }
+
+    p
+}
+
+/*
  * Seralizes polynomial
  */
 pub fn poly_tobytes(a: Poly) -> [u8; POLY_BYTES] {

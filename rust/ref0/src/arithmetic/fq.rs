@@ -284,12 +284,14 @@ pub fn cmp(a: Elem, b: Elem) -> u8 {
 /* Description: converts stream of bytes into value of type Elem
  *
  */
-pub fn elem_frombytes(bytes: [u8; 24]) -> Elem {
+pub fn elem_frombytes(ep: &[u8; 18]) -> Elem {
     let mut e: Elem = [0, 0, 0];
 
-    for i in 0..NLIMBS {
-        e[i] = u64::from_le_bytes(bytes[8*i..8*i+8].try_into().unwrap());
+    for i in 0..NLIMBS-1 {
+        e[i] = u64::from_le_bytes(ep[8*i..8*i+8].try_into().unwrap());
     }
+
+    e[NLIMBS-1] = u16::from_le_bytes(ep[8*(NLIMBS-1)..8*(NLIMBS-1)+2].try_into().unwrap()) as u64;
 
     e
 }
