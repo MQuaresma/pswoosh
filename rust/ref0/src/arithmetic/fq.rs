@@ -1,13 +1,15 @@
 const NLIMBS: usize = 3;
 pub type Elem = [u64; NLIMBS];
 pub const ELEM_BYTES: usize = 18;
+const K: usize = 144; // bit size of q
 
                      /*2^0              2^64               2^128  */
 pub const Q: Elem = [0xffffffffffffd000,0xffffffffffffffff,0x0ffff]; // Q = 2^144-12287
 pub const HQ: Elem = [0xffffffffffffe800,0xffffffffffffffff,0x7fff];
 pub const QQ: Elem = [0xfffffffffffff400,0xffffffffffffffff,0x3fff];
 pub const TQQ: Elem = [0xffffffffffffdc00,0xffffffffffffffff,0xbfff];
-const BARR: Elem = [0, 0, 0]; //FIXME
+const BARR: Elem = [0x0000000000000000, 0x00002fff00000000, 0x0000000000000000];
+// const BARR: [u64; 6] = [0x0000000000000000, 0x00002fff00000000, 0x0000000000000000, 0x1000000000000]; //BARR = 2^(64*2*NLIMBS) // Q
 const M: u64 = 12287;
 
 /* TODO: replace w/ macro ??
