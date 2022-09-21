@@ -6,8 +6,21 @@ use crate::arithmetic::polyvec::*;
 
 const SYMBYTES: usize = 32;
 
-// TODO: replace hardcoded values by expressions
-
+/*
+ * TODO:
+ * - replaced hardcoded values with expressions
+ * - write unit tests
+ * - Make rej_sampling constant time
+ * - Implement gen_matrix
+ * - Replace dummy code in XOF functions with call to library (RustCrypto ??)
+ *   - Do we want to domain separate
+ * - Fix cmp in fq.rs
+ * - Implement fqmul
+ * - Implement full modular reduction
+ * - Compute BARR constant for barret reduction
+ * - Implement polyvec_ntt
+ * - Replace constants in fq with macros (??)
+ */
 
 /*
  * Key generation wrapper
@@ -32,7 +45,7 @@ pub fn skey_deriv(pkp: [u8; POLYVEC_BYTES], skp: [u8; 2*POLYVEC_BYTES], seed: [u
  */
 fn kg(seed: [u8; SYMBYTES]) {
     let mut nonce: u8 = 0;
-    let a: [PolyVec; N] = genmatrix(seed, nonce);
+    let a: [PolyVec; N] = genmatrix(&seed, nonce);
 
     nonce += 1;
     let mut s: PolyVec = getnoise(seed, nonce);
@@ -50,7 +63,7 @@ fn kg(seed: [u8; SYMBYTES]) {
 fn sdk(pk: PolyVec, mut sk: (PolyVec, PolyVec), seed: [u8; 32]) {
     let mut s: PolyVec = sk.0;
     let mut e: PolyVec = sk.1;
-    let a: [PolyVec; N] = genmatrix(seed, 0);
+    let a: [PolyVec; N] = genmatrix(&seed, 0);
 
     let pk2: PolyVec = gen_pk(&a, &mut s, &mut e);
     let mut r_in: [u8; POLYVEC_BYTES * 2] = [0; POLYVEC_BYTES * 2];
@@ -113,21 +126,18 @@ fn round(c: Elem) -> Elem {
 }
 
 
-
 const RATE: usize = 136;
 /*
  * Placeholder for XOF function (need to check licensing)
  */
-fn xof_squeeze(out: &mut [u8])
-{
+fn xof_squeeze(out: &mut [u8], len: usize) {
 }
 
 
 /*
  * Placeholder for XOF function (need to check licensing)
  */
-fn xof_absorb(inp: &[u8], len: usize)
-{
+fn xof_absorb(inp: &[u8], len: usize) {
 }
 
 
@@ -139,14 +149,13 @@ fn rej_sampling(buf: &[u8; RATE], p: &mut Poly, mut offset: usize) -> usize {
     let mut c: usize = 0;
     let mut tElem: Elem = [0, 0, 0];
 
-    while(c < RATE-18) {
-        tElem = elem_frombytes(buf[c..c+18].try_into().unwrap());
-        //TODO: not CT!!!!
+    while(c < RATE-ELEM_BYTES) {
+        tElem = elem_frombytes(buf[c..c+ELEM_BYTES].try_into().unwrap());
         if cmp(tElem, Q) < 0 {
             p[offset] = tElem;
             offset += 1;
         }
-        c += 24;
+        c += ELEM_BYTES
     }
 
     offset
@@ -161,7 +170,7 @@ fn gen_randoffset(inp: [u8; POLYVEC_BYTES * 2]) -> Poly {
     xof_absorb(&inp, POLYVEC_BYTES * 2);
 
     while (ctr < d) {
-        xof_squeeze(&mut buf);
+        xof_squeeze(&mut buf, RATE);
         ctr = rej_sampling(&buf, &mut r, ctr);
     }
 
@@ -169,18 +178,34 @@ fn gen_randoffset(inp: [u8; POLYVEC_BYTES * 2]) -> Poly {
 }
 
 
-fn getnoise(seed: [u8; SYMBYTES], nonce: u8) -> PolyVec
-{
+fn getnoise(seed: [u8; SYMBYTES], nonce: u8) -> PolyVec {
     let p: PolyVec = [init(); N];
 
     p
 }
 
 
-// TODO
-fn genmatrix(seed: [u8; SYMBYTES], nonce: u8) -> [[Poly; N]; N]
-{
+fn genmatrix(seed: &[u8; SYMBYTES], nonce: u8) -> [[Poly; N]; N] {
+    let mut inp: [u8; SYMBYTES + 1] = [0; SYMBYTES+1];
+    let mut buf: [u8; RATE] = [0; RATE];
     let mut a: [[Poly; N];N] = [[init(); N]; N];
+    let mut ctr: usize = 0;
+
+    inp[0..SYMBYTES].copy_from_slice(seed);
+    inp[SYMBYTES] = nonce;
+    xof_absorb(&inp, SYMBYTES + 1);
+
+
+    for i in 0..N {
+        for j in 0..N {
+            ctr = 0;
+
+            while (ctr < d) {
+                xof_squeeze(&mut buf, RATE);
+                ctr = rej_sampling(&buf, &mut a[i][j], ctr);
+            }
+        }
+    }
 
     a
 }

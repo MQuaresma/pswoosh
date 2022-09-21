@@ -77,10 +77,10 @@ fn mul(a: Elem, b: Elem) -> [u64; 6] {
     c
 }
 
-/* Modular multiplication
- *   c = (a * b) mod 2^144
+/*
+ * Performs multiplication with partial modular reduction: (a * b) mod 2^144
+ *
  */
-
 fn mulmod(c: &mut Elem, a: Elem, b: Elem) {
     let mut h: u64;
     let mut l: u64;
@@ -188,7 +188,9 @@ fn mulmod(c: &mut Elem, a: Elem, b: Elem) {
     (_, c[2]) = addc(c[2], 0, cf);  // CHECK: cf == 0 ??
 }
 
-/* Conditionally subtracts Q from h if h >= Q in CT*/
+/*
+ * Conditionally subtracts Q from h if h >= Q in CT
+ */
 pub fn csub(h: &mut Elem) {
     let mut t: Elem;
     let mut t0: u64;
@@ -221,8 +223,9 @@ pub fn csub(h: &mut Elem) {
 pub fn fqmul(c: &mut Elem, a: Elem, b: Elem) {
 }
 
-// Efficient CT modular reduction
-// TODO: doesn't work with h >= Q^2
+/* TODO: doesn't work with h >= Q^2
+ * Efficient CT modular reduction
+ */ 
 fn barrett_red(h: &mut [u64; 6]) -> Elem {
     let mut t: [u64; 6];
     let mut r0: Elem = [0, 0, 0];
@@ -255,7 +258,7 @@ fn barrett_red(h: &mut [u64; 6]) -> Elem {
 
     r
 }
-/* Description: Compares two field elements in constant time
+/* Description: Constant time comparison of two field elements
  *
  * Returns -1 if a < b; 0 if a = b; 1 if a > b
  */
