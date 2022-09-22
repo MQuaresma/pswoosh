@@ -216,11 +216,16 @@ fn cbd(buf: &[u8; NOISE_BYTES], p: &mut PolyVec) {
                 p[i][4*j + k] = Q.clone();
 
                 for i in 0..NLIMBS {
-                    p[i][4*j + k][i] &= m;
+                    p[i][4*j + k][i] &= m;  //p[i][4*j + k] = Q iff t = 0b11
                 }
 
-                m = (t & 0x1) as u64;               // t = 1
-                p[i][j*4 + k][0] ^= m;  //
+                /* Note:
+                 * (Q-1) = -1 mod Q
+                 * Q's last bit is always set, so setting last bit to 0 is same
+                 * as subtracting one
+                 */
+                m = (t & 0x1) as u64;
+                p[i][j*4 + k][0] ^= m;
 
                 c >>= 2;
             }
