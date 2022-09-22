@@ -1,5 +1,6 @@
 mod arithmetic;
 
+use std::arch::asm;
 use crate::arithmetic::fq::*;
 use crate::arithmetic::poly::*;
 use crate::arithmetic::polyvec::*;
@@ -105,10 +106,12 @@ fn gen_pk(a: &[PolyVec; N], s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
     let s = polyvec_ntt(s);
     let e = polyvec_ntt(e);
 
-    // A * s + e
+    // tmp = A * s
     for i in 0..N {
         tmp[i] = polyvec_basemul_acc(a[i], *s);
     }
+
+    // pk = (A*s) + e
     let pk: PolyVec = polyvec_add(tmp, *e);
 
     pk
@@ -120,7 +123,7 @@ fn gen_pk(a: &[PolyVec; N], s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
 fn round(c: Elem) -> Elem {
     let mut c1: u8 = 0;
     let mut c2: u8 = 0;
-    let mut r: Elem = [0, 0, 0];
+    let mut r: Elem = [0; NLIMBS];
 
     c1 = cmp(c, QQ);
     c2 = cmp(c, TQQ);
@@ -158,7 +161,7 @@ fn rej_sampling(buf: &[u8; RATE], p: &mut Poly, mut offset: usize) -> usize {
     let mut t: u8 = 0;
     let mut tElem: Elem = [0, 0, 0];
 
-    while(c < RATE-ELEM_BYTES) {
+    while(c < RATE-ELEM_BYTES && offset < d) {
         tElem = elem_frombytes(buf[c..c+ELEM_BYTES].try_into().unwrap());
         t = cmp(tElem, Q);
         t = (t as i8 >> 7) as u8; //t = 0xff if t < 0
@@ -188,20 +191,37 @@ fn gen_randoffset(inp: &[u8; POLYVEC_BYTES * 2]) -> Poly {
 
 /*
  * Samples ternary noise from a centered binomial distribution with:
- * - 25%: -1
- * - 50%: 0
- * - 25%: 1
+ * - 25%: -1 (11)
+ * - 50%: 0  (00, 10)
+ * - 25%: 1  (01)
  */
 fn cbd(buf: &[u8; NOISE_BYTES], p: &mut PolyVec) {
     let mut c: u8 = 0;
     let mut t: u8 = 0;
+    let mut m: u64 = 0;
 
     for i in 0..N {
         for j in 0..d/4 {
             c = buf[i*d/4+j];
             for k in 0..4 {
                 t = c & 0x3;
-                p[i][j*4 + k] = [0,0,0]; //FIXME: load into p
+                m = t as u64;
+                unsafe {
+                    asm!("popcnt {m}, {m}", // if t=0b11 then m=2 if else m=1
+                         m = inout(reg) m,
+                        );
+                }
+                m = ((m << 61) as i64 >> 63) as u64;
+
+                p[i][4*j + k] = Q.clone();
+
+                for i in 0..NLIMBS {
+                    p[i][4*j + k][i] &= m;
+                }
+
+                m = (t & 0x1) as u64;               // t = 1
+                p[i][j*4 + k][0] ^= m;  //
+
                 c >>= 2;
             }
         }

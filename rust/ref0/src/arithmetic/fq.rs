@@ -1,4 +1,4 @@
-const NLIMBS: usize = 3;
+pub const NLIMBS: usize = 3;
 pub type Elem = [u64; NLIMBS];
 pub const ELEM_BYTES: usize = 18;
 const K: usize = 144; // bit size of q
