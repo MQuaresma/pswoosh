@@ -1,8 +1,8 @@
 mod arithmetic;
 
 use std::arch::asm;
-use crate::arithmetic::fq::*;
-use crate::arithmetic::poly::*;
+use crate::arithmetic::{fq::*, poly::*};
+use getrandom;
 // use crate::arithmetic::polyvec::*;
 
 const SYMBYTES: usize = 32;
@@ -39,19 +39,23 @@ pub fn keygen(seed: [u8; SYMBYTES]) {
     kg(seed);
 }
 
-
 /*
  * Generate secret and error vectors and compute public key
  */
 fn kg(seed: [u8; SYMBYTES]) {
     let mut nonce: u8 = 0;
-    let a: Poly = genmatrix(&seed, nonce);
+    let mut noiseseed: [u8; SYMBYTES] = [0; SYMBYTES];
+    let a: Poly = genmatrix(&seed);
+
+    // CHECK ME
+    getrandom::getrandom(&mut noiseseed);
+    noiseseed = Ok::<[u8; 32], getrandom::Error>(noiseseed).unwrap();
 
     nonce += 1;
-    let mut s: Poly = getnoise(&seed, nonce);
+    let mut s: Poly = getnoise(&noiseseed, nonce);
 
     nonce += 1;
-    let mut e: Poly = getnoise(&seed, nonce);
+    let mut e: Poly = getnoise(&noiseseed, nonce);
 
     let pk: Poly = gen_pk(&a, &mut s, &mut e);
 }
@@ -74,7 +78,7 @@ pub fn skey_deriv(pkp: [u8; POLY_BYTES], skp: [u8; 2*POLY_BYTES], seed: [u8; SYM
 fn sdk(pk: Poly, mut sk: (Poly, Poly), seed: [u8; 32]) {
     let mut s: Poly = sk.0;
     let mut e: Poly = sk.1;
-    let a: Poly = genmatrix(&seed, 0);
+    let a: Poly = genmatrix(&seed);
 
     let pk2: Poly = gen_pk(&a, &mut s, &mut e);
     let mut r_in: [u8; POLY_BYTES * 2] = [0; POLY_BYTES * 2];
@@ -247,16 +251,12 @@ fn getnoise(seed: &[u8; SYMBYTES], nonce: u8) -> Poly {
 }
 
 
-fn genmatrix(seed: &[u8; SYMBYTES], nonce: u8) -> Poly {
-    let mut inp: [u8; SYMBYTES + 1] = [0; SYMBYTES+1];
+fn genmatrix(seed: &[u8; SYMBYTES]) -> Poly {
     let mut buf: [u8; RATE] = [0; RATE];
     let mut a: Poly = init();
     let mut ctr: usize = 0;
 
-    inp[0..SYMBYTES].copy_from_slice(seed);
-    inp[SYMBYTES] = nonce;
-
-    xof_absorb(&inp, SYMBYTES + 1);
+    xof_absorb(seed, SYMBYTES + 1);
 
     ctr = 0;
     while (ctr < d) {
