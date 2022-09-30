@@ -2,6 +2,8 @@ pub const NLIMBS: usize = 3;
 pub type Elem = [u64; NLIMBS];
 pub const ELEM_BYTES: usize = 18;
 const K: usize = 144; // bit size of q
+const RAD: usize = 64; //radix
+
 
                      /*2^0              2^64               2^128  */
 pub const Q: Elem = [0xffffffffffffd000,0xffffffffffffffff,0x0ffff]; // Q = 2^144-12287

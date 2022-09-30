@@ -3,10 +3,10 @@ mod arithmetic;
 use std::arch::asm;
 use crate::arithmetic::fq::*;
 use crate::arithmetic::poly::*;
-use crate::arithmetic::polyvec::*;
+// use crate::arithmetic::polyvec::*;
 
 const SYMBYTES: usize = 32;
-const NOISE_BYTES: usize = (d*N*2)/8;
+const NOISE_BYTES: usize = (d*2)/8;
 
 fn main() {
     let r: u8 = (0x80 as u8);
@@ -25,10 +25,11 @@ fn main() {
  * - Fix cmp in fq.rs
  * - Implement fqmul
  * - Implement full modular reduction
- * - Implement getnoise
+ * x Implement getnoise
  * x Compute BARR constant for barret reduction
  * - Implement polyvec_ntt
  * - Replace constants in fq with macros (??)
+ * - Convert to RLWE
  */
 
 /*
@@ -44,25 +45,25 @@ pub fn keygen(seed: [u8; SYMBYTES]) {
  */
 fn kg(seed: [u8; SYMBYTES]) {
     let mut nonce: u8 = 0;
-    let a: [PolyVec; N] = genmatrix(&seed, nonce);
+    let a: Poly = genmatrix(&seed, nonce);
 
     nonce += 1;
-    let mut s: PolyVec = getnoise(&seed, nonce);
+    let mut s: Poly = getnoise(&seed, nonce);
 
     nonce += 1;
-    let mut e: PolyVec = getnoise(&seed, nonce);
+    let mut e: Poly = getnoise(&seed, nonce);
 
-    let pk: PolyVec = gen_pk(&a, &mut s, &mut e);
+    let pk: Poly = gen_pk(&a, &mut s, &mut e);
 }
 
 
 /*
  * Key derivation wrapper to deserialize the vectors of polynomials
  */
-pub fn skey_deriv(pkp: [u8; POLYVEC_BYTES], skp: [u8; 2*POLYVEC_BYTES], seed: [u8; SYMBYTES]) {
-    let pk: PolyVec = polyvec_frombytes(&pkp);
-    let mut s: PolyVec = polyvec_frombytes(skp[..POLYVEC_BYTES].try_into().unwrap());
-    let mut e: PolyVec = polyvec_frombytes(skp[POLYVEC_BYTES..].try_into().unwrap());
+pub fn skey_deriv(pkp: [u8; POLY_BYTES], skp: [u8; 2*POLY_BYTES], seed: [u8; SYMBYTES]) {
+    let pk: Poly = poly_frombytes(&pkp);
+    let mut s: Poly = poly_frombytes(skp[..POLY_BYTES].try_into().unwrap());
+    let mut e: Poly = poly_frombytes(skp[POLY_BYTES..].try_into().unwrap());
 
     sdk(pk, (s,e), seed);
 }
@@ -70,20 +71,20 @@ pub fn skey_deriv(pkp: [u8; POLYVEC_BYTES], skp: [u8; 2*POLYVEC_BYTES], seed: [u
 /*
  * Shared key derivation
  */
-fn sdk(pk: PolyVec, mut sk: (PolyVec, PolyVec), seed: [u8; 32]) {
-    let mut s: PolyVec = sk.0;
-    let mut e: PolyVec = sk.1;
-    let a: [PolyVec; N] = genmatrix(&seed, 0);
+fn sdk(pk: Poly, mut sk: (Poly, Poly), seed: [u8; 32]) {
+    let mut s: Poly = sk.0;
+    let mut e: Poly = sk.1;
+    let a: Poly = genmatrix(&seed, 0);
 
-    let pk2: PolyVec = gen_pk(&a, &mut s, &mut e);
-    let mut r_in: [u8; POLYVEC_BYTES * 2] = [0; POLYVEC_BYTES * 2];
+    let pk2: Poly = gen_pk(&a, &mut s, &mut e);
+    let mut r_in: [u8; POLY_BYTES * 2] = [0; POLY_BYTES * 2];
 
-    r_in[0..POLYVEC_BYTES].copy_from_slice(&polyvec_tobytes(pk));
-    r_in[POLYVEC_BYTES..POLYVEC_BYTES*2].copy_from_slice(&polyvec_tobytes(pk2));
+    r_in[0..POLY_BYTES].copy_from_slice(&poly_tobytes(pk));
+    r_in[POLY_BYTES..POLY_BYTES*2].copy_from_slice(&poly_tobytes(pk2));
 
     let r = gen_randoffset(&r_in);   // r = H(pk, pk2);
 
-    let mut k: Poly = polyvec_basemul_acc(pk, s);
+    let mut k: Poly = poly_basemul(pk, s);
     k = poly_add(k, r);
     rec(&mut k);
 }
@@ -100,19 +101,17 @@ fn rec(k: &mut Poly) {
 /*
  * Generates a public key from matrix A, secret and error vector
  */
-fn gen_pk(a: &[PolyVec; N], s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
-    let mut tmp = polyvec_init();
+fn gen_pk(a: &Poly, s: &mut Poly, e: &mut Poly) -> Poly {
+    let mut tmp = init();
 
-    let s = polyvec_ntt(s);
-    let e = polyvec_ntt(e);
+    let s = poly_ntt(s);
+    let e = poly_ntt(e);
 
-    // tmp = A * s
-    for i in 0..N {
-        tmp[i] = polyvec_basemul_acc(a[i], *s);
-    }
+    // tmp = a * s
+    tmp = poly_basemul(*a, *s);
 
-    // pk = (A*s) + e
-    let pk: PolyVec = polyvec_add(tmp, *e);
+    // pk = (a*s) + e
+    let pk: Poly = poly_add(tmp, *e);
 
     pk
 }
@@ -174,12 +173,12 @@ fn rej_sampling(buf: &[u8; RATE], p: &mut Poly, mut offset: usize) -> usize {
 }
 
 
-fn gen_randoffset(inp: &[u8; POLYVEC_BYTES * 2]) -> Poly {
+fn gen_randoffset(inp: &[u8; POLY_BYTES * 2]) -> Poly {
     let mut buf: [u8; RATE] = [0; RATE];
     let mut r: Poly = init();
     let mut ctr: usize = 0;
 
-    xof_absorb(inp, POLYVEC_BYTES * 2);
+    xof_absorb(inp, POLY_BYTES * 2);
 
     while (ctr < d) {
         xof_squeeze(&mut buf, RATE);
@@ -195,48 +194,46 @@ fn gen_randoffset(inp: &[u8; POLYVEC_BYTES * 2]) -> Poly {
  * - 50%: 0  (00, 10)
  * - 25%: 1  (01)
  */
-fn cbd(buf: &[u8; NOISE_BYTES], p: &mut PolyVec) {
+fn cbd(buf: &[u8; NOISE_BYTES], p: &mut Poly) {
     let mut c: u8 = 0;
     let mut t: u8 = 0;
     let mut m: u64 = 0;
 
-    for i in 0..N {
-        for j in 0..d/4 {
-            c = buf[i*d/4+j];
-            for k in 0..4 {
-                t = c & 0x3;
-                m = t as u64;
-                unsafe {
-                    asm!("popcnt {m}, {m}", // if t=0b11 then m=2 if else m=1
-                         m = inout(reg) m,
-                        );
-                }
-                m = ((m << 61) as i64 >> 63) as u64;
-
-                p[i][4*j + k] = Q.clone();
-
-                for i in 0..NLIMBS {
-                    p[i][4*j + k][i] &= m;  //p[i][4*j + k] = Q iff t = 0b11
-                }
-
-                /* Note:
-                 * (Q-1) = -1 mod Q
-                 * Q's last bit is always set, so setting last bit to 0 is same
-                 * as subtracting one
-                 */
-                m = (t & 0x1) as u64;
-                p[i][j*4 + k][0] ^= m;
-
-                c >>= 2;
+    for i in 0..d/4 {
+        c = buf[i];
+        for k in 0..4 {
+            t = c & 0x3;
+            m = t as u64;
+            unsafe {
+                asm!("popcnt {m}, {m}", // if t=0b11 then m=2 if else m=1
+                     m = inout(reg) m,
+                    );
             }
+            m = ((m << 61) as i64 >> 63) as u64;
+
+            p[4*i + k] = Q.clone();
+
+            for j in 0..NLIMBS {
+                p[4*i + k][j] &= m;  //p[4*j + k] = Q iff t = 0b11
+            }
+
+            /* Note:
+             * (Q-1) = -1 mod Q
+             * Q's last bit is always set, so setting last bit to 0 is equivalent
+             * to subtracting one
+             */
+            m = (t & 0x1) as u64;
+            p[4*i + k][0] ^= m;
+
+            c >>= 2;
         }
     }
 }
 
-fn getnoise(seed: &[u8; SYMBYTES], nonce: u8) -> PolyVec {
+fn getnoise(seed: &[u8; SYMBYTES], nonce: u8) -> Poly {
     let mut inp: [u8; SYMBYTES + 1] = [0; SYMBYTES + 1];
     let mut buf: [u8; NOISE_BYTES] = [0; NOISE_BYTES];
-    let mut p: PolyVec = [init(); N];
+    let mut p: Poly = init();
 
     inp[..SYMBYTES].copy_from_slice(seed);
     inp[SYMBYTES] = nonce;
@@ -250,10 +247,10 @@ fn getnoise(seed: &[u8; SYMBYTES], nonce: u8) -> PolyVec {
 }
 
 
-fn genmatrix(seed: &[u8; SYMBYTES], nonce: u8) -> [[Poly; N]; N] {
+fn genmatrix(seed: &[u8; SYMBYTES], nonce: u8) -> Poly {
     let mut inp: [u8; SYMBYTES + 1] = [0; SYMBYTES+1];
     let mut buf: [u8; RATE] = [0; RATE];
-    let mut a: [[Poly; N];N] = [[init(); N]; N];
+    let mut a: Poly = init();
     let mut ctr: usize = 0;
 
     inp[0..SYMBYTES].copy_from_slice(seed);
@@ -261,15 +258,10 @@ fn genmatrix(seed: &[u8; SYMBYTES], nonce: u8) -> [[Poly; N]; N] {
 
     xof_absorb(&inp, SYMBYTES + 1);
 
-    for i in 0..N {
-        for j in 0..N {
-            ctr = 0;
-
-            while (ctr < d) {
-                xof_squeeze(&mut buf, RATE);
-                ctr = rej_sampling(&buf, &mut a[i][j], ctr);
-            }
-        }
+    ctr = 0;
+    while (ctr < d) {
+        xof_squeeze(&mut buf, RATE);
+        ctr = rej_sampling(&buf, &mut a, ctr);
     }
 
     a

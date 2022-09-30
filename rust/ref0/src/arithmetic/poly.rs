@@ -51,6 +51,11 @@ pub fn poly_basemul(a: Poly, b: Poly) -> Poly {
     c
 }
 
+// TODO
+pub fn poly_ntt(a: &mut Poly) -> &mut Poly {
+    a
+}
+
 /*
  * Deserializes polynomial
  */
