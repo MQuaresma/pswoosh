@@ -6,8 +6,7 @@ pub const POLYVEC_BYTES: usize = POLY_BYTES * N;
 pub type PolyVec = [Poly; N];  // R_q^N
 
 pub fn polyvec_init() -> PolyVec {
-    let mut p : PolyVec = [init(); N];
-    p
+    [poly_init(); N]
 }
 
 
@@ -25,8 +24,8 @@ pub fn polyvec_add(a: PolyVec, b: PolyVec) -> PolyVec {
  * Base-multiplication in a polynomials
  */
 pub fn polyvec_basemul_acc(a: PolyVec, b: PolyVec) -> Poly {
-    let mut c: Poly = init();
-    let mut t: Poly = init();
+    let mut c: Poly;
+    let mut t: Poly;
 
     c = poly_basemul(a[0], b[0]);
     
@@ -39,8 +38,8 @@ pub fn polyvec_basemul_acc(a: PolyVec, b: PolyVec) -> Poly {
 }
 
 // TODO
-pub fn polyvec_ntt(a: &mut PolyVec) -> &mut PolyVec {
-    a
+pub fn polyvec_ntt(a: &mut PolyVec) {
+
 }
 
 pub fn polyvec_frombytes(a: &[u8; POLYVEC_BYTES]) -> PolyVec {
@@ -56,9 +55,22 @@ pub fn polyvec_frombytes(a: &[u8; POLYVEC_BYTES]) -> PolyVec {
 pub fn polyvec_tobytes(a: PolyVec) -> [u8; POLYVEC_BYTES] {
     let mut r: [u8; POLYVEC_BYTES] = [0; POLYVEC_BYTES];
 
-    for i in 0..d {
+    for i in 0..N {
         r[POLY_BYTES*i..POLY_BYTES*i+POLY_BYTES].copy_from_slice(&poly_tobytes(a[i]));
     }
 
     r
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_polyvec_add() {
+        println!("polyvec_add: ");
+        let a: [PolyVec; 5] = [polyvec_init(); 5];
+
+        let c = polyvec_add(a[0], a[1]);
+    }
 }

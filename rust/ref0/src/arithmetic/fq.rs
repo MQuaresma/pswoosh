@@ -1,32 +1,46 @@
-pub const NLIMBS: usize = 3;
+pub const NLIMBS: usize = 4;
 pub type Elem = [u64; NLIMBS];
-pub const ELEM_BYTES: usize = 18;
-const K: usize = 144; // bit size of q
+const K: usize = 214; // bit size of q
+pub const ELEM_BYTES: usize = K/8+1; //FIXME
 const RAD: usize = 64; //radix
 
+/* Q = 2^214-255 */   /* 2^0              2^64               2^128              2^192   */
+pub const Q: Elem =   [0xffffffffffffff01,0xffffffffffffffff,0xffffffffffffffff,0x3fffff];
+/* HQ = Q/2 */
+pub const HQ: Elem =  [0xffffffffffffff80,0xffffffffffffffff,0xffffffffffffffff,0x1fffff];
+/* QQ = Q/4 */
+pub const QQ: Elem =  [0xffffffffffffffc0,0xffffffffffffffff,0xffffffffffffffff,0xfffff];
+/* TQQ = 3Q/4 */
+pub const TQQ: Elem = [0xffffffffffffff40,0xffffffffffffffff,0xffffffffffffffff,0x2fffff]; 
+/* BARR = 2^(64*2*NLIMBS) / Q */
+const BARR: [u64; 5] = [0x0, 0xff00000, 0x0, 0x0, 0x40000000000];
+const M: u64 = 255;
 
-                     /*2^0              2^64               2^128  */
-pub const Q: Elem = [0xffffffffffffd000,0xffffffffffffffff,0x0ffff]; // Q = 2^144-12287
-pub const HQ: Elem = [0xffffffffffffe800,0xffffffffffffffff,0x7fff];
-pub const QQ: Elem = [0xfffffffffffff400,0xffffffffffffffff,0x3fff];
-pub const TQQ: Elem = [0xffffffffffffdc00,0xffffffffffffffff,0xbfff];
-const BARR: Elem = [0x0000000000000000, 0x00002fff00000000, 0x0000000000000000];
-// const BARR: [u64; 6] = [0x0000000000000000, 0x00002fff00000000, 0x0000000000000000, 0x1000000000000]; //BARR = 2^(64*2*NLIMBS) // Q
-const M: u64 = 12287;
+#[link(name = "fq", kind="static")]
+extern {
+    fn fp_add(rp: *const u64, ap: *const u64, bp: *const u64);
+    fn fp_sub(rp: *const u64, ap: *const u64, bp: *const u64);
+    fn fp_mul(rp: *const u64, ap: *const u64, bp: *const u64);
+    fn fp_toM(rp: *const u64, ap: *const u64);
+    fn fp_fromM(rp: *const u64, ap: *const u64);
+}
 
-/* TODO: replace w/ macro ??
-pub const HQ: Elem = [Q[0] >> 1 + ((Q[1] % 1) << 63), Q[1] >> 1 + ((Q[2] % 1) << 63), Q[2] >> 1];  
-pub const QQ: Elem = [Q[0] >> 2 + ((Q[1] % 3) << 62), Q[1] >> 1 + ((Q[2] % 3) << 62), Q[2] >> 2];
-pub const 3QQ: Elem = add([Q[0] >> 2 + ((Q[1] % 3) << 62), Q[1] >> 1 + ((Q[2] % 3) << 62), Q[2] >> 2];
- */
+pub fn add(c: &mut Elem, a: Elem, b: Elem) {
+    unsafe {
+        fp_add(c.as_ptr(), a.as_ptr(), b.as_ptr());
+    }
+}
 
-fn main() {
-    let mut a: Elem = [0,0,0x18000];
-    let b: Elem = [6,7,8];
-    let mut c: Elem = [0, 0, 0];
+pub fn sub(c: &mut Elem, a: Elem, b: Elem) {
+    unsafe {
+        fp_sub(c.as_ptr(), a.as_ptr(), b.as_ptr());
+    }
+}
 
-    let r = cmp(a, b);
-    println!("{:x}", r);
+pub fn mul(c: &mut Elem, a: Elem, b: Elem) {
+    unsafe {
+        fp_mul(c.as_ptr(), a.as_ptr(), b.as_ptr());
+    }
 }
 
 fn addc(a: u64, b: u64, cf: u64) -> (u64, u64) {
@@ -34,12 +48,54 @@ fn addc(a: u64, b: u64, cf: u64) -> (u64, u64) {
     ((r >> 64) as u64, r as u64)
 }
 
-fn sbb(a: u64, b: u64, cf: u64) -> (u64, u64) {
+/*
+ * Conditionally subtracts Q from h if h >= Q in CT
+ */
+pub fn csub(h: &mut Elem) {
+    let mut t: Elem;
+    let mut t0: u64;
+    let mut mask: u64;
+    let mut cf: u64 = 0;
+
+    t = h.clone();
+
+    (cf, t[0]) = addc(t[0], M, cf);
+    (cf, t[1]) = addc(t[1], 0, cf);
+    (_, t[2]) = addc(t[2], 0, cf);  // cf = 0
+
+    t0 = t[2] >> 16;
+    t[2] &= 0xffff;
+    (_, mask) = addc(!t0, 1, 0); // prevents overflow when t0 = 0
+
+    t[0] ^= h[0];
+    t[1] ^= h[1];
+    t[2] ^= h[2];
+
+    t[0] &= mask;
+    t[1] &= mask;
+    t[2] &= mask;
+
+    h[0] ^= t[0];
+    h[1] ^= t[1];
+    h[2] ^= t[2];
+}
+
+pub fn fp_init() -> Elem {
+    [0; NLIMBS]
+}
+
+/*
+fn addc(a: u64, b: u64, cf: u64) -> (u64, u64) {
+let r = (a as u128) + (b as u128) + (cf as u128);
+((r >> 64) as u64, r as u64)
+}
+
+    fn sbb(a: u64, b: u64, cf: u64) -> (u64, u64) {
     let r = (a as u128) - ((b as u128) + (cf as u128));
     ((r >> 127) as u64, r as u64) //TODO: checkme
 }
 
-fn mulc(a: u64, b: u64) -> (u64, u64) {
+    fn mulc(a: u64, b: u64) -> (u64, u64) {
     let r = (a as u128) * (b as u128);
     let l = r as u64;
     let h = (r >> 64) as u64;
@@ -50,49 +106,49 @@ pub fn add(c: &mut Elem, a: Elem, b: Elem) {
     let mut cf: u64 = 0;
 
     for i in 0..NLIMBS {
-        (cf, c[i]) = addc(a[i], b[i], cf);
-    }
+    (cf, c[i]) = addc(a[i], b[i], cf);
+}
 }
 
-pub fn sub(c: &mut Elem, a: Elem, b: Elem) {
+    pub fn sub(c: &mut Elem, a: Elem, b: Elem) {
     let mut cf: u64 = 0;
 
     for i in 0..NLIMBS {
-        (cf, c[i]) = sbb(b[i], a[i], cf);
-    }
+    (cf, c[i]) = sbb(b[i], a[i], cf);
+}
 }
 
-fn mul(a: Elem, b: Elem) -> [u64; 6] {
+    fn mul(a: Elem, b: Elem) -> [u64; 2*NLIMBS] {
     let mut h: u64;
     let mut l: u64;
     let mut cf: u64 = 0;
-    let mut c: [u64; 6] = [0, 0, 0, 0, 0, 0];
+    let mut c: [u64; 2*NLIMBS] = [0; 2*NLIMBS];
 
     for i in 0..NLIMBS {
-        for j in 0..NLIMBS {
-            (h, l) = mulc(b[j], a[i]);
-            (cf, c[i+j]) = addc(l, c[i+j], cf);
-            (cf, c[i+j+1]) = addc(h, c[i+j+1], cf);
-        }
-    }
+    for j in 0..NLIMBS {
+    (h, l) = mulc(b[j], a[i]);
+    (cf, c[i+j]) = addc(l, c[i+j], cf);
+    (cf, c[i+j+1]) = addc(h, c[i+j+1], cf);
+}
+}
     
-    c[5] += cf;
+    c[NLIMBS-1] += cf;
 
     c
 }
 
-/*
- * Performs multiplication with partial modular reduction: (a * b) mod 2^144
- *
- */
-fn mulmod(c: &mut Elem, a: Elem, b: Elem) {
+    /*
+     * Performs multiplication with partial modular reduction: (a * b) mod 2^144
+     *
+     */
+    fn mulmod(c: &mut Elem, a: Elem, b: Elem) {
     let mut h: u64;
     let mut l: u64;
     let mut t0: u64;
     let mut t1: u64;
     let mut cf: u64 = 0;
 
-    *c = [0, 0, 0];
+     *c = fq_init();
 
     (h, l) = mulc(a[0], b[0]);
     (cf, c[0]) = addc(c[0], l, cf);
@@ -192,10 +248,10 @@ fn mulmod(c: &mut Elem, a: Elem, b: Elem) {
     (_, c[2]) = addc(c[2], 0, cf);  // CHECK: cf == 0 ??
 }
 
-/*
- * Conditionally subtracts Q from h if h >= Q in CT
- */
-pub fn csub(h: &mut Elem) {
+    /*
+     * Conditionally subtracts Q from h if h >= Q in CT
+     */
+    pub fn csub(h: &mut Elem) {
     let mut t: Elem;
     let mut t0: u64;
     let mut mask: u64;
@@ -224,17 +280,17 @@ pub fn csub(h: &mut Elem) {
     h[2] ^= t[2];
 }
 
-pub fn fqmul(c: &mut Elem, a: Elem, b: Elem) {
+    pub fn fqmul(c: &mut Elem, a: Elem, b: Elem) {
 }
 
-/* TODO: doesn't work with h >= Q^2
- * Efficient CT modular reduction
- */ 
-fn barrett_red(h: &mut [u64; 6]) -> Elem {
+    /* TODO: doesn't work with h >= Q^2
+     * Efficient CT modular reduction
+     */ 
+    fn barrett_red(h: &mut [u64; 6]) -> Elem {
     let mut t: [u64; 6];
-    let mut r0: Elem = [0, 0, 0];
-    let mut r1: Elem = [0, 0, 0];
-    let mut r: Elem = [0, 0, 0];
+    let mut r0: Elem = fq_init();
+    let mut r1: Elem = fq_init();
+    let mut r: Elem = fq_init();
 
     // q1 = x / b^(k-1)
     r0[0] = h[2];
@@ -242,7 +298,8 @@ fn barrett_red(h: &mut [u64; 6]) -> Elem {
     r0[2] = 0;
 
     //q2 = q1 * BARR
-    t = mul(r0, BARR);
+    // t = mul(r0, BARR);
+    t = [0; 6];
 
     //q3 = q2 / b^(k+1)
     r0[0] = t[4];
@@ -253,7 +310,7 @@ fn barrett_red(h: &mut [u64; 6]) -> Elem {
     r1[1] = h[5];
 
     // q3 * Q / b ^ (k+1)
-    *h = mul(r0, Q);
+    // *h = mul(r0, Q);
     r0[0] = h[4];
     r0[1] = h[5];
 
@@ -262,27 +319,32 @@ fn barrett_red(h: &mut [u64; 6]) -> Elem {
 
     r
 }
+ */
+
 /* Description: Constant time comparison of two field elements
  *
  * Returns -1 if a < b; 0 if a = b; 1 if a > b
  */
 pub fn cmp(a: Elem, b: Elem) -> u8 {
     let mut r: u8 = 0;
+    let mut u_ai: i64;
+    let mut u_bi: i64;
     let mut mask: u8 = 0xff;
-    let mut gt: u8 = 0;
-    let mut lt: u8 = 0;
-    let mut tr: u64 = 0;
+    let mut gt: u8;
+    let mut lt: u8;
+    let mut tr: i64;
 
     for i in (0..NLIMBS).rev() {
-        tr = (a[i] as i64 - b[i] as i64) as u64;
+        u_ai = a[i] as i64;
+        u_bi = b[i] as i64;
+        tr = (u_ai - u_bi) as i64;
         lt = ((tr >> 63) as u8) << 7;
 
-        tr = (b[i] as i64 - a[i] as i64) as u64;
+        tr = (u_bi - u_ai) as i64;
         gt = (tr >> 63) as u8;
 
-        //FIXME
-        r |= (lt & mask);
-        r |= (gt & mask);
+        r |= lt;
+        r |= gt;
     }
 
     r
@@ -291,8 +353,8 @@ pub fn cmp(a: Elem, b: Elem) -> u8 {
 /* Description: converts stream of bytes into value of type Elem
  *
  */
-pub fn elem_frombytes(ep: &[u8; 18]) -> Elem {
-    let mut e: Elem = [0, 0, 0];
+pub fn elem_frombytes(ep: &[u8; 27]) -> Elem {
+    let mut e: Elem = fp_init();
 
     for i in 0..NLIMBS-1 {
         e[i] = u64::from_le_bytes(ep[8*i..8*i+8].try_into().unwrap());
