@@ -2,8 +2,10 @@ use crate::arithmetic::fq::*;
 
 pub const D: usize = 256;
 pub const POLY_BYTES: usize = ELEM_BYTES * D;
+const ZETAS: [Elem; D] = [[0; NLIMBS]; D]; // FIXME
 
 pub type Poly = [Elem; D]; // R_q
+
 
 pub fn poly_init() -> Poly {
     [fp_init(); D]
@@ -50,11 +52,34 @@ pub fn poly_basemul(a: Poly, b: Poly) -> Poly {
     c
 }
 
-/* TODO
+/* CHECK ME
  * In-place NTT
  */
 pub fn poly_ntt(a: &mut Poly) {
+    let mut len: usize = D>>2;
+    let mut off: usize;
+    let mut joff: usize;
+    let mut zoff: usize = 0;
+    let mut t: Elem;
+    let mut r: Elem = fp_init();
 
+    for i in 0..7 {
+        off = 0;
+        while(off < D) {
+            zoff += 1;
+            joff = off;
+            for _j in 0..len {
+                t = a[joff+len];
+                mul(&mut r, t, ZETAS[zoff]);
+                t = a[joff];
+                add(&mut a[joff], t, r);
+                sub(&mut a[joff+len], t, r);
+                joff += 1;
+            }
+            off += len;
+        }
+        len >>= 1;
+    }
 }
 
 /* TODO

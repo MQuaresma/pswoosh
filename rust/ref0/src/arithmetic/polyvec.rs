@@ -37,9 +37,16 @@ pub fn polyvec_basemul_acc(a: PolyVec, b: PolyVec) -> Poly {
     c
 }
 
-// TODO
 pub fn polyvec_ntt(a: &mut PolyVec) {
+    for i in 0..N {
+        poly_ntt(&mut a[i]);
+    }
+}
 
+pub fn polyvec_invntt(a: &mut PolyVec) {
+    for i in 0..N {
+        poly_invntt(&mut a[i]);
+    }
 }
 
 pub fn polyvec_frombytes(a: &[u8; POLYVEC_BYTES]) -> PolyVec {
