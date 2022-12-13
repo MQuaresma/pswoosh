@@ -40,7 +40,7 @@ pub fn poly_csub(mut a: Poly) -> Poly {
     a
 }
 
-/*
+/* FIXME
  * Base-multiplication in a polynomials
  */
 pub fn poly_basemul(a: Poly, b: Poly) -> Poly {
@@ -140,8 +140,52 @@ pub fn poly_tobytes(a: Poly) -> [u8; POLY_BYTES] {
     let mut r: [u8; POLY_BYTES] = [0; POLY_BYTES];
 
     for i in 0..D {
-        r[ELEM_BYTES*i..ELEM_BYTES*i+8].copy_from_slice(&elem_tobytes(a[i]));
+        r[ELEM_BYTES*i..ELEM_BYTES*(i+1)].copy_from_slice(&elem_tobytes(a[i]));
     }
 
     r
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_poly_add() {
+        let a: Poly = [QQ.clone(); D];
+        let b: Poly = [HQ.clone(); D];
+        let rc: Poly = [TQQ.clone(); D];
+        let mut c: Poly = poly_init();
+
+        c = poly_add(a, b);
+
+        assert_eq!(rc, c, "poly_add: polynomials don't match");
+    }
+
+    #[test]
+    fn test_poly_basemul() {
+      assert!(false, "poly_basemul: not implemented");
+    }
+
+    #[test]
+    fn test_poly_ntt() {
+        let a: Poly = [HQ.clone(); D];
+        let mut b: Poly = a.clone();
+
+        poly_ntt(&mut b);
+        poly_invntt(&mut b);
+
+        assert_eq!(a, b, "poly_ntt: polynomial vectors don't match");
+    }
+
+    #[test]
+    fn test_poly_bytes() {
+        let a: Poly = [TQQ.clone(); D];
+        let mut r: Poly = poly_init();
+        let mut b: [u8; POLY_BYTES] = [0; POLY_BYTES];
+
+        b = poly_tobytes(a);
+        r = poly_frombytes(&b);
+        assert_eq!(a, r, "poly_bytes: Values don't match");
+    }
 }
