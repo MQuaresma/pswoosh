@@ -2,8 +2,8 @@ use crate::arithmetic::fq::*;
 
 pub const D: usize = 256;
 pub const POLY_BYTES: usize = ELEM_BYTES * D;
-const ZETAS: [Elem; D] = [[0; NLIMBS]; D]; // FIXME
-const ZETAS_INV: [Elem; D] = [[0; NLIMBS]; D]; // FIXME
+const ZETAS: [Elem; D/2] = [[0; NLIMBS]; D/2]; // FIXME
+const ZETAS_INV: [Elem; D/2] = [[0; NLIMBS]; D/2]; // FIXME
 
 pub type Poly = [Elem; D]; // R_q
 
@@ -45,9 +45,39 @@ pub fn poly_csub(mut a: Poly) -> Poly {
  */
 pub fn poly_basemul(a: Poly, b: Poly) -> Poly {
     let mut c: Poly = poly_init();
+    let mut t0: Elem = fp_init();
+    let mut t1: Elem = fp_init();
+    let mut zeta: Elem = fp_init();
+    let mut zoff: usize = 64;
+    let mut i: usize = 0;
 
-    for i in 0..D {
-        mul(&mut c[i], a[i], b[i]); //scalar multiplication in NTT
+    while(i < D) {
+        zeta = ZETAS[zoff];
+        zoff += 1;
+
+        mul(&mut t0, a[i+1], b[i+1]);
+        mul(&mut t1, t0, zeta);
+
+        mul(&mut t0, a[i], b[i]);
+        add(&mut c[i], t0, t1);
+
+        mul(&mut t0, a[i], b[i+1]);
+        mul(&mut t1, a[i+1], b[i]);
+        add(&mut c[i+1], t0, t1);
+
+        i += 2;
+
+        mul(&mut t0, a[i+1], b[i+1]);
+        mul(&mut t1, t0, zeta);
+
+        mul(&mut t0, a[i], b[i]);
+        sub(&mut c[i], t0, t1); // -zeta ?
+
+        mul(&mut t0, a[i], b[i+1]);
+        mul(&mut t1, a[i+1], b[i]);
+        add(&mut c[i+1], t0, t1);
+
+        i += 2;
     }
 
     c
@@ -57,14 +87,14 @@ pub fn poly_basemul(a: Poly, b: Poly) -> Poly {
  * In-place NTT
  */
 pub fn poly_ntt(a: &mut Poly) {
-    let mut len: usize = D>>2;
+    let mut len: usize = D>>1;
     let mut off: usize;
     let mut joff: usize;
     let mut zoff: usize = 0;
     let mut t: Elem;
     let mut r: Elem = fp_init();
 
-    for i in 0..7 {
+    for i in 0..6 {
         off = 0;
         while(off < D) {
             zoff += 1;
@@ -77,7 +107,7 @@ pub fn poly_ntt(a: &mut Poly) {
                 sub(&mut a[joff+len], t, r);
                 joff += 1;
             }
-            off += len;
+            off = joff + len;
         }
         len >>= 1;
     }
@@ -87,7 +117,7 @@ pub fn poly_ntt(a: &mut Poly) {
  * In-place Inverse NTT
  */
 pub fn poly_invntt(a: &mut Poly) {
-    let mut len: usize = 1;
+    let mut len: usize = 2;
     let mut off: usize;
     let mut joff: usize;
     let mut zoff: usize = 0;
@@ -95,7 +125,7 @@ pub fn poly_invntt(a: &mut Poly) {
     let mut r: Elem;
     let mut m: Elem = fp_init();
 
-    for i in 0..7 {
+    for i in 0..6 {
         off = 0;
         while(off < D) {
             joff = off;
@@ -107,7 +137,7 @@ pub fn poly_invntt(a: &mut Poly) {
                 mul(&mut a[joff+len], m, ZETAS_INV[zoff]);
                 joff += 1;
             }
-            off += len;
+            off = joff + len;
             zoff += 1;
         }
         len <<= 1;
@@ -115,7 +145,7 @@ pub fn poly_invntt(a: &mut Poly) {
 
     for i in 0..D {
         t = a[i];
-        mul(&mut t, a[i], ZETAS_INV[D-1]);
+        mul(&mut t, a[i], ZETAS_INV[D/2-1]);
         a[i] = t;
     }
 }
@@ -164,7 +194,14 @@ mod tests {
 
     #[test]
     fn test_poly_basemul() {
-      assert!(false, "poly_basemul: not implemented");
+        let a: Poly = [QQ.clone(); D];
+        let b: Poly = [HQ.clone(); D];
+        let rc: Poly = poly_init();
+        let mut c: Poly = poly_init();
+
+        c = poly_basemul(a, b);
+
+        assert!(false, "poly_basemul: not implemented");
     }
 
     #[test]
