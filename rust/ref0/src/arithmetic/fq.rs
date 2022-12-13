@@ -1,7 +1,7 @@
 pub const NLIMBS: usize = 4;
 pub type Elem = [u64; NLIMBS];
 const K: usize = 214; // bit size of q
-pub const ELEM_BYTES: usize = K/8+1; //FIXME
+pub const ELEM_BYTES: usize = K/8+2; //FIXME
 const RAD: usize = 64; //radix
 
 /* Q = 2^214-255 */   /* 2^0              2^64               2^128              2^192   */
@@ -352,21 +352,24 @@ pub fn cmp(a: Elem, b: Elem) -> u8 {
     r
 }
 
-/* Description: converts stream of bytes into value of type Elem
+/* Converts stream of bytes into value of type Elem
  *
  */
-pub fn elem_frombytes(ep: &[u8; 27]) -> Elem {
+pub fn elem_frombytes(ep: &[u8; ELEM_BYTES]) -> Elem {
     let mut e: Elem = fp_init();
 
     for i in 0..NLIMBS-1 {
         e[i] = u64::from_le_bytes(ep[8*i..8*i+8].try_into().unwrap());
     }
 
-    e[NLIMBS-1] = u16::from_le_bytes(ep[8*(NLIMBS-1)..8*(NLIMBS-1)+2].try_into().unwrap()) as u64;
+    e[NLIMBS-1] = u32::from_le_bytes(ep[8*(NLIMBS-1)..8*(NLIMBS-1)+4].try_into().unwrap()) as u64;
 
     e
 }
-
+/* Converts field element into a byte buffer
+ *
+ * n.b: currently exporting one extra unnecessary/zero byte for simplicity reasons
+ */
 pub fn elem_tobytes(e: Elem) -> [u8; ELEM_BYTES] {
     let mut r: [u8; ELEM_BYTES] = [0; ELEM_BYTES];
 
@@ -374,7 +377,68 @@ pub fn elem_tobytes(e: Elem) -> [u8; ELEM_BYTES] {
         r[8*i..8*i+8].copy_from_slice(&e[i].to_le_bytes());
     }
 
-    r[8*(NLIMBS-1)..8*(NLIMBS-1)+2].copy_from_slice(&e[NLIMBS-1].to_le_bytes()[0..2]); //remove trailing bytes
+    r[8*(NLIMBS-1)..8*(NLIMBS-1)+4].copy_from_slice(&e[NLIMBS-1].to_le_bytes()[0..4]); //remove trailing bytes
 
     r
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_fp_add() {
+        let a: Elem = QQ.clone();
+        let b: Elem = QQ.clone();
+        let rc: Elem = HQ.clone();
+        let mut c: Elem = fp_init();
+
+        add(&mut c, a, b);
+
+        assert_eq!(rc, c, "fp_add: Values don't match");
+    }
+
+    #[test]
+    fn test_fp_sub() {
+        let a: Elem = HQ.clone();
+        let b: Elem = QQ.clone();
+        let rc: Elem = QQ.clone();
+        let mut c: Elem = fp_init();
+
+        sub(&mut c, a, b);
+
+        assert_eq!(rc, c, "fp_sub: Values don't match");
+    }
+
+    #[test]
+    fn test_fp_mul() {
+        let a: Elem = QQ.clone();
+        let b: Elem = [0x03, 0x0, 0x0, 0x0];
+        let rc: Elem = TQQ.clone();
+        let mut c: Elem = fp_init();
+
+        mul(&mut c, a, b);
+
+        assert_eq!(rc, c, "fp_mul: Values don't match");
+    }
+
+    #[test]
+    fn test_fp_bytes() {
+        let a: Elem = QQ.clone();
+        let mut r: Elem = fp_init();
+        let mut b: [u8; ELEM_BYTES] = [0; ELEM_BYTES];
+
+        b = elem_tobytes(a);
+        r = elem_frombytes(&b);
+        assert_eq!(a, r, "fp_bytes: Values don't match");
+    }
+
+    #[test]
+    fn test_cmp() {
+        let a: Elem = HQ.clone();
+
+        assert_eq!(cmp(a, HQ), 0x00);
+        assert_eq!(cmp(a, QQ), 0x01);
+        assert_eq!(cmp(a, TQQ), 0x80);
+    }
 }
