@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 getrandom = "0.2.7"
+sha3 = "0.10.6"

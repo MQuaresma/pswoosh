@@ -4,21 +4,22 @@ pub mod util;
 use std::arch::asm;
 use crate::arithmetic::{fq::*, poly::*, polyvec::*};
 use getrandom;
+use sha3::{Shake128, CShake128, digest::{Update, ExtendableOutput, XofReader}};
 
 const SYMBYTES: usize = 32;
 const NOISE_BYTES: usize = (N*D*2)/8;
+const PUBLICKEY_BYTES: usize = POLYVEC_BYTES;
+const SECRETKEY_BYTES: usize = POLYVEC_BYTES;
+const RATE: usize = 136;
 
 /*
  * TODO:
  * - replaced hardcoded values with expressions
- * - write unit tests
  * x Make rej_sampling constant time
  * x Implement gen_matrix
- * - Replace dummy code in XOF functions with call to library (RustCrypto ??)
- *   - Do we want to domain separate
- * - Fix cmp in fq.rs
- * - Implement fqmul
- * - Implement full modular reduction
+ * x Replace dummy code in XOF functions with call to library (RustCrypto)
+ *   - domain separate
+ * x Fix cmp in fq.rs
  * x Implement getnoise
  * x Compute BARR constant for barret reduction
  * - Implement polyvec_ntt
@@ -87,9 +88,15 @@ fn sdk(pk: PolyVec, sk: (PolyVec, PolyVec), seed: [u8; 32]) {
 /*
  * Reconciliation
  */
-fn rec(k: &mut Poly) {
-    for i in 0..D {
-        k[i] = round(k[i]);
+fn rec(kv: &Poly, k: &mut [u8; SYMBYTES]) {
+    let mut t: u8;
+
+    for i in 0..D/8 {
+        t = 0;
+        k[i] = 0;
+        for j in 0..8 {
+          k[i] |= (round(kv[8*i + j]) << j);
+        }
     }
 }
 
@@ -136,41 +143,26 @@ fn gen_pkr(a: &[PolyVec; N], s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
 /*
  * Converts element in Zq to a bit
  */
-fn round(c: Elem) -> Elem {
-    let mut c1: u8;
-    let mut c2: u8;
-    let mut r: Elem = fp_init();
+fn round(c: Elem) -> u8 {
+    let mut l: u8;
+    let mut h: u8;
+    let mut r: u8 = 0;
 
-    c1 = cmp(c, QQ);
-    c2 = cmp(c, TQQ);
+    l = cmp(c, QQ);  //l = 0x80 if c < Q/4
+    h = cmp(c, TQQ); //h = 0x01 if 3Q/4 < c
 
-    c1 = (c1 >> 7) ^ 0x1;               // (c1 >> 7) = 1 iff c1 < 0 i.e. c < QQ
-    c2 = ((c2 as i8 - 1) as u8) >> 7;   // (c2 - 1) < 0 iff c2 <= 0
+    l = (l >> 7) ^ 0x01;
+    h = (h & 0x01) ^ 0x01;
 
-    r[0] = (c1 & c2) as u64;
+    r = (l & h) as u8;
 
     r
 }
 
 
-const RATE: usize = 136;
-/*
- * Placeholder for XOF function (need to check licensing)
- */
-fn xof_squeeze(out: &mut [u8], len: usize) {
-}
-
-
-/*
- * Placeholder for XOF function (need to check licensing)
- */
-fn xof_absorb(inp: &[u8], len: usize) {
-}
-
-
-/* Description: generates coefficients in Zq from a (uniformly random) stream of bytes
+/* Generates coefficients in Zq from a (uniformly random) stream of bytes
  *
- * Result: number of coefficients generated
+ * Returns: number of coefficients generated
  */
 fn rej_sampling(buf: &[u8; RATE], p: &mut Poly, mut offset: usize) -> usize {
     let mut c: usize = 0;
@@ -194,11 +186,14 @@ fn gen_randoffset(inp: &[u8; POLYVEC_BYTES * 2]) -> Poly {
     let mut buf: [u8; RATE] = [0; RATE];
     let mut r: Poly = poly_init();
     let mut ctr: usize = 0;
+    let mut xof = Shake128::default();
+    let mut rxof;
 
-    xof_absorb(inp, POLYVEC_BYTES * 2);
+    xof.update(inp);
+    rxof = xof.finalize_xof();
 
     while (ctr < D) {
-        xof_squeeze(&mut buf, RATE);
+        rxof.read(&mut buf);  //squeeze RATE bytes from state
         ctr = rej_sampling(&buf, &mut r, ctr);
     }
 
@@ -236,7 +231,7 @@ fn cbd(buf: &[u8; NOISE_BYTES], p: &mut PolyVec) {
                 }
 
                 /* Note:
-                 * (Q-1) = -1 mod Q
+                 * -1 = (Q-1) mod Q
                  * Q's last bit is always set, so setting last bit to 0 is equivalent
                  * to subtracting one
                  */
@@ -253,33 +248,67 @@ fn getnoise(seed: &[u8; SYMBYTES], nonce: u8) -> PolyVec {
     let mut inp: [u8; SYMBYTES + 1] = [0; SYMBYTES + 1];
     let mut buf: [u8; NOISE_BYTES] = [0; NOISE_BYTES];
     let mut p: PolyVec = polyvec_init();
+    let mut xof = Shake128::default();
+    let mut rxof;
 
     inp[..SYMBYTES].copy_from_slice(seed);
     inp[SYMBYTES] = nonce;
-    xof_absorb(&inp, SYMBYTES + 1);
 
-    xof_squeeze(&mut buf, NOISE_BYTES);
+    xof.update(&inp);
+    rxof = xof.finalize_xof();
+
+    rxof.read(&mut buf);
 
     cbd(&buf, &mut p);
 
     p
 }
 
+/*
+ * Tranpose matrix (testing purposes only)
+ */
+fn tranpose(a: &[PolyVec;N], at: &mut [PolyVec; N]) {
+    for i in 0..N {
+        for j in 0..N {
+            at[i][j] = a[j][i];
+        }
+    }
+}
 
-fn genmatrix(seed: &[u8; SYMBYTES]) -> [PolyVec; N] {
+/*
+ * Generates matrix A from a seed
+ * - t => generate A^T
+ */
+fn genmatrix(seed: &[u8; SYMBYTES], t: bool) -> [PolyVec; N] {
     let mut buf: [u8; RATE] = [0; RATE];
     let mut a: [PolyVec; N] = [polyvec_init(); N];
     let mut ctr: usize;
+    let mut xof = Shake128::default();
+    let mut rxof;
 
-    xof_absorb(seed, SYMBYTES + 1);
+    xof.update(seed);
+    rxof = xof.finalize_xof();
 
-    for i in 0..N {
-        for j in 0..N {
-            ctr = 0;
+    if !t {
+        for i in 0..N {
+            for j in 0..N {
+                ctr = 0;
 
-            while (ctr < D) {
-                xof_squeeze(&mut buf, RATE);
-                ctr = rej_sampling(&buf, &mut a[i][j], ctr);
+                while (ctr < D) {
+                    rxof.read(&mut buf);  //squeeze RATE bytes from state
+                    ctr = rej_sampling(&buf, &mut a[i][j], ctr);
+                }
+            }
+        }
+    } else {
+        for i in 0..N {
+            for j in 0..N {
+                ctr = 0;
+
+                while (ctr < D) {
+                    rxof.read(&mut buf);  //squeeze RATE bytes from state
+                    ctr = rej_sampling(&buf, &mut a[j][i], ctr);
+                }
             }
         }
     }
