@@ -327,23 +327,25 @@ pub fn add(c: &mut Elem, a: Elem, b: Elem) {
  */
 pub fn cmp(a: Elem, b: Elem) -> u8 {
     let mut r: u8 = 0;
-    let mut u_ai: i64;
-    let mut u_bi: i64;
     let mut mask: u8 = 0xff;
+    let mut s_ai: i64;
+    let mut s_bi: i64;
     let mut gt: u8;
     let mut lt: u8;
-    let mut tr: i64;
 
     for i in (0..NLIMBS).rev() {
-        u_ai = a[i] as i64;
-        u_bi = b[i] as i64;
-        tr = (u_ai - u_bi) as i64;
-        lt = ((tr >> 63) as u8) << 7;
+        s_ai = a[i] as i64;
+        s_bi = b[i] as i64;
 
-        tr = (u_bi - u_ai) as i64;
-        gt = (tr >> 63) as u8;
+        lt = (((s_ai - s_bi) as u64) >> 63) as u8;
+        gt = (((s_bi - s_ai) as u64) >> 63) as u8;
 
-        r |= lt;
+        //  high order limb comparisons take precedence
+        lt &= mask;
+        gt &= mask;
+
+        mask ^= (lt | gt);
+        r |= (lt << 7);
         r |= gt;
     }
 
