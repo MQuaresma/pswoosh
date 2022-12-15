@@ -49,6 +49,18 @@ pub fn mul(c: &mut Elem, a: Elem, b: Elem) {
     }
 }
 
+pub fn toM(aM: &mut Elem, a: Elem) {
+    unsafe {
+        fp_toM(aM.as_ptr(), a.as_ptr());
+    }
+}
+
+pub fn fromM(a: &mut Elem, aM: Elem) {
+    unsafe {
+        fp_fromM(a.as_ptr(), aM.as_ptr());
+    }
+}
+
 fn addc(a: u64, b: u64, cf: u64) -> (u64, u64) {
     let r = (a as u128) + (b as u128) + (cf as u128);
     ((r >> 64) as u64, r as u64)

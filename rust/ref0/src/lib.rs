@@ -2,7 +2,7 @@ mod arithmetic;
 pub mod util;
 
 use std::arch::asm;
-use crate::arithmetic::{fq::*, poly::*, polyvec::*};
+use crate::arithmetic::{fq::*, poly::*, polyvec::*, params::*};
 use getrandom;
 use sha3::{Shake128, CShake128, digest::{Update, ExtendableOutput, XofReader}};
 

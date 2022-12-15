@@ -1,9 +1,8 @@
 use crate::arithmetic::fq::*;
+use crate::arithmetic::zetas::*;
+use crate::arithmetic::params::*;
 
-pub const D: usize = 256;
 pub const POLY_BYTES: usize = ELEM_BYTES * D;
-const ZETAS: [Elem; D/2] = [[0; NLIMBS]; D/2]; // FIXME
-const ZETAS_INV: [Elem; D/2] = [[0; NLIMBS]; D/2]; // FIXME
 
 pub type Poly = [Elem; D]; // R_q
 
@@ -40,7 +39,15 @@ pub fn poly_csub(mut a: Poly) -> Poly {
     a
 }
 
-/* FIXME
+pub fn poly_fromM(ap: Poly) -> Poly {
+    ap
+}
+
+pub fn poly_toM(ap: Poly) -> Poly {
+    ap
+}
+
+/*
  * Base-multiplication in a polynomials
  */
 pub fn poly_basemul(a: Poly, b: Poly) -> Poly {
@@ -48,7 +55,7 @@ pub fn poly_basemul(a: Poly, b: Poly) -> Poly {
     let mut t0: Elem = fp_init();
     let mut t1: Elem = fp_init();
     let mut zeta: Elem = fp_init();
-    let mut zoff: usize = 64;
+    let mut zoff: usize = D/4;
     let mut i: usize = 0;
 
     while(i < D) {
@@ -83,7 +90,7 @@ pub fn poly_basemul(a: Poly, b: Poly) -> Poly {
     c
 }
 
-/* CHECK ME
+/*
  * In-place NTT
  */
 pub fn poly_ntt(a: &mut Poly) {
@@ -94,7 +101,7 @@ pub fn poly_ntt(a: &mut Poly) {
     let mut t: Elem;
     let mut r: Elem = fp_init();
 
-    for i in 0..6 {
+    for i in 0..7 {
         off = 0;
         while(off < D) {
             zoff += 1;
@@ -113,7 +120,7 @@ pub fn poly_ntt(a: &mut Poly) {
     }
 }
 
-/* TODO
+/*
  * In-place Inverse NTT
  */
 pub fn poly_invntt(a: &mut Poly) {
@@ -125,11 +132,11 @@ pub fn poly_invntt(a: &mut Poly) {
     let mut r: Elem;
     let mut m: Elem = fp_init();
 
-    for i in 0..6 {
+    for i in 0..7 {
         off = 0;
         while(off < D) {
             joff = off;
-            for j in 0..len {
+            for _j in 0..len {
                 t = a[joff];
                 r = a[joff+len];
                 add(&mut a[joff], t, r);

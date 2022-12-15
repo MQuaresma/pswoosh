@@ -1,7 +1,6 @@
 use crate::arithmetic::poly::*;
+use crate::arithmetic::params::*;
 
-
-pub const N: usize = 28;
 pub const POLYVEC_BYTES: usize = POLY_BYTES * N;
 
 pub type PolyVec = [Poly; N];  // R_q^N
