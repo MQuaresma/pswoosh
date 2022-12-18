@@ -32,13 +32,6 @@ pub fn poly_sub(a: Poly, b: Poly) -> Poly {
     c
 }
 
-pub fn poly_csub(mut a: Poly) -> Poly {
-    for i in 0..D {
-        csub(&mut a[i]);
-    }
-    a
-}
-
 pub fn poly_fromM(ap: Poly) -> Poly {
     ap
 }
@@ -201,14 +194,30 @@ mod tests {
 
     #[test]
     fn test_poly_basemul() {
-        let a: Poly = [QQ.clone(); D];
-        let b: Poly = [HQ.clone(); D];
-        let rc: Poly = poly_init();
+        let mut a: Poly = [QQ.clone(); D];
+        let mut b: Poly = [[0x02, 0x0, 0x0, 0x0]; D];
+        let mut rc: Poly = poly_init();
         let mut c: Poly = poly_init();
+        let mut base: Elem = [0xffffffffffffff00, 0xffffffffffffffff, 0xffffffffffffffff, 0x00000000003fffff];
+        let mut off: Elem = [0x7f, 0x0, 0x0, 0x0];
+        let mut one: Elem = [0x01, 0x0, 0x0, 0x0];
+        let mut t: Elem = fp_init();
 
+        for i in 0..128 {
+            rc[i] = off.clone();
+            rc[128 + i] = base.clone();
+            sub(&mut t, base, one);
+            base = t;
+            sub(&mut t, off, one);
+            off = t;
+        }
+
+        poly_ntt(&mut a);
+        poly_ntt(&mut b);
         c = poly_basemul(a, b);
+        poly_invntt(&mut c);
 
-        assert!(false, "poly_basemul: not implemented");
+        assert_eq!(c, rc, "poly_basemul: polynomials don't match");
     }
 
     #[test]
