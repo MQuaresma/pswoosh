@@ -14,82 +14,86 @@ const RATE: usize = 136;
 
 /*
  * TODO:
- * - replaced hardcoded values with expressions
+ * x replaced hardcoded values with expressions
  * x Make rej_sampling constant time
  * x Implement gen_matrix
  * x Replace dummy code in XOF functions with call to library (RustCrypto)
- *   - domain separate
+ * - Domain separation for XOF functions
  * x Fix cmp in fq.rs
  * x Implement getnoise
  * x Compute BARR constant for barret reduction
- * - Implement polyvec_ntt
- * - Replace constants in fq with macros (??)
+ * x Implement polyvec_ntt
+ * - Integrate NIZK
  */
 
 /*
  * Key generation wrapper
  */
-pub fn keygen(seed: [u8; SYMBYTES]) -> ([u8; SECRETKEY_BYTES*2], [u8; PUBLICKEY_BYTES*2]) {
-    kg(seed)
+pub fn keygen(seed: [u8; SYMBYTES], f:bool) -> ([u8; SECRETKEY_BYTES], [u8; PUBLICKEY_BYTES]) {
+    kg(seed, f)
 }
+
 
 /*
  * Generate secret and error vectors and compute public key
  */
-fn kg(seed: [u8; SYMBYTES]) -> ([u8; SECRETKEY_BYTES*2], [u8; PUBLICKEY_BYTES*2]) {
+fn kg(seed: [u8; SYMBYTES], f: bool) -> ([u8; SECRETKEY_BYTES], [u8; PUBLICKEY_BYTES]) {
     let mut nonce: u8 = 0;
     let mut noiseseed: [u8; SYMBYTES] = [0; SYMBYTES];
-    let a: [PolyVec; N] = genmatrix(&seed, false);
-    let mut sk: [u8; SECRETKEY_BYTES*2] = [0; SECRETKEY_BYTES*2];
-    let mut pk: [u8; PUBLICKEY_BYTES*2] = [0; PUBLICKEY_BYTES*2];
+    let mut skv: [u8; SECRETKEY_BYTES] = [0; SECRETKEY_BYTES];
+    let mut pkv: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
 
     getrandom::getrandom(&mut noiseseed).expect("getrandom failed");
 
-    let mut s: PolyVec = getnoise(&noiseseed, nonce);
+    let a: [PolyVec; N] = genmatrix(&seed, f);
 
+    let mut s: PolyVec = getnoise(&noiseseed, nonce);
     nonce += 1;
     let mut e: PolyVec = getnoise(&noiseseed, nonce);
 
-    let pkl: PolyVec = gen_pkl(&a, &mut s, &mut e);
-    let pkr: PolyVec = gen_pkr(&a, &mut s, &mut e);
+    let pk: PolyVec =
+        if f {
+            gen_pkl(&a, &mut s, &mut e)
+        } else {
+            gen_pkr(&a, &mut s, &mut e)
+        };
 
-    sk[0..POLYVEC_BYTES].copy_from_slice(&polyvec_tobytes(s));
-    sk[POLYVEC_BYTES..POLYVEC_BYTES*2].copy_from_slice(&polyvec_tobytes(e));
-    pk[0..POLYVEC_BYTES].copy_from_slice(&polyvec_tobytes(pkl));
-    pk[POLYVEC_BYTES..POLYVEC_BYTES*2].copy_from_slice(&polyvec_tobytes(pkr));
+    skv = polyvec_tobytes(s);
+    pkv = polyvec_tobytes(pk);
 
-    (sk, pk)
+    (skv, pkv)
 }
 
 
 /*
  * Key derivation wrapper to deserialize the vectors of polynomials
  */
-pub fn skey_deriv(pkp: [u8; PUBLICKEY_BYTES], skp: [u8; SECRETKEY_BYTES*2], seed: [u8; SYMBYTES], f: bool) -> [u8; SYMBYTES] {
-    let pk: PolyVec = polyvec_frombytes(&pkp);
-    let s: PolyVec = polyvec_frombytes(skp[..POLYVEC_BYTES].try_into().unwrap());
-    let e: PolyVec = polyvec_frombytes(skp[POLYVEC_BYTES..].try_into().unwrap());
+pub fn skey_deriv(pkp: [u8; PUBLICKEY_BYTES], skp: [u8; SECRETKEY_BYTES], seed: [u8; SYMBYTES], f: bool) -> [u8; SYMBYTES] {
+    let mut pk: PolyVec = polyvec_frombytes(&pkp);
+    let mut s: PolyVec = polyvec_frombytes(&skp);
 
-    sdk(pk, (s,e), seed, f)
+    sdk(&mut pk, &mut s, seed, f)
 }
 
 /*
  * Shared key derivation
  */
-fn sdk(pk: PolyVec, sk: (PolyVec, PolyVec), seed: [u8; 32], f: bool) -> [u8; SYMBYTES] {
-    let mut s: PolyVec = sk.0;
-    let mut e: PolyVec = sk.1;
-    let a: [PolyVec; N] = genmatrix(&seed, f);
+fn sdk(pk: &mut PolyVec, s: &mut PolyVec, seed: [u8; SYMBYTES], f: bool) -> [u8; SYMBYTES] {
     let mut kv: Poly;
     let mut k: [u8; SYMBYTES] = [0; SYMBYTES];
 
-    if f {
-        let pk2: PolyVec = gen_pkl(&a, &mut s, &mut e);
-        kv = polyvec_basemul_acc(pk, s);
+    polyvec_ntt(pk);
+    polyvec_ntt(s);
+
+    if !f {
+        // pk * s
+        kv = polyvec_basemul_acc(*pk, *s)
     } else {
-        let pk2: PolyVec = gen_pkr(&a, &mut s, &mut e);
-        kv = polyvec_basemul_acc(s, pk);
+        // s^T * pk
+        kv = polyvec_basemul_acc(*s, *pk)
     }
+
+    poly_invntt(&mut kv);
 
     /*
     let mut r_in: [u8; POLYVEC_BYTES * 2] = [0; POLYVEC_BYTES * 2];
@@ -111,13 +115,10 @@ fn sdk(pk: PolyVec, sk: (PolyVec, PolyVec), seed: [u8; 32], f: bool) -> [u8; SYM
  * Reconciliation
  */
 fn rec(kv: &Poly, k: &mut [u8; SYMBYTES]) {
-    let mut t: u8;
-
     for i in 0..D/8 {
-        t = 0;
         k[i] = 0;
         for j in 0..8 {
-          k[i] |= (round(kv[8*i + j]) << j);
+            k[i] |= (round(kv[8*i + j]) << j);
         }
     }
 }
@@ -129,12 +130,13 @@ fn gen_pkl(a: &[PolyVec; N], s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
     let mut tmp: PolyVec = polyvec_init();
 
     polyvec_ntt(s);
-    polyvec_ntt(e);
 
     // tmp = sT * A
     for i in 0..N {
         tmp[i] = polyvec_basemul_acc(*s, a[i]);
     }
+
+    polyvec_invntt(&mut tmp);
 
     // pk = (sT * A) + eT
     let pk: PolyVec = polyvec_add(tmp, *e);
@@ -149,15 +151,16 @@ fn gen_pkr(a: &[PolyVec; N], s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
     let mut tmp: PolyVec = polyvec_init();
 
     polyvec_ntt(s);
-    polyvec_ntt(e);
 
     // tmp = A * s
     for i in 0..N {
         tmp[i] = polyvec_basemul_acc(a[i], *s);
     }
 
+    polyvec_invntt(&mut tmp);
+
     // pk = (A * s) + e
-    let pk: PolyVec = polyvec_add(tmp, *e);
+    let mut pk: PolyVec = polyvec_add(tmp, *e);
 
     pk
 }
@@ -348,24 +351,20 @@ mod tests {
     #[test]
     fn test_scheme() {
         let mut seed: [u8; SYMBYTES] = [0; SYMBYTES];
-        let mut pkp1: [u8; PUBLICKEY_BYTES * 2] = [0; PUBLICKEY_BYTES * 2];
-        let mut skp1: [u8; SECRETKEY_BYTES * 2] = [0; SECRETKEY_BYTES * 2];
-        let mut pkp2: [u8; PUBLICKEY_BYTES * 2] = [0; PUBLICKEY_BYTES * 2];
-        let mut skp2: [u8; SECRETKEY_BYTES * 2] = [0; SECRETKEY_BYTES * 2];
-        let mut pk1r: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
-        let mut pk2l: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
+        let mut pk1: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
+        let mut sk1: [u8; SECRETKEY_BYTES] = [0; SECRETKEY_BYTES];
+        let mut pk2: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
+        let mut sk2: [u8; SECRETKEY_BYTES] = [0; SECRETKEY_BYTES];
         let mut ss1: [u8; SYMBYTES] = [0; SYMBYTES];
         let mut ss2: [u8; SYMBYTES] = [0; SYMBYTES];
 
         getrandom::getrandom(&mut seed).expect("getrandom failed");
 
-        (skp1, pkp1) = kg(seed);
-        (skp2, pkp2) = kg(seed);
+        (sk1, pk1) = kg(seed, true);
+        (sk2, pk2) = kg(seed, false);
 
-        pk1r.copy_from_slice(&pkp1[PUBLICKEY_BYTES..]);
-        pk2l.copy_from_slice(&pkp2[..PUBLICKEY_BYTES]);
-        ss1 = skey_deriv(pk2l, skp1, seed, true);
-        ss2 = skey_deriv(pk1r, skp2, seed, false);
+        ss1 = skey_deriv(pk2, sk1, seed, true);
+        ss2 = skey_deriv(pk1, sk2, seed, false);
 
         assert_eq!(ss1, ss2, "ERROR: shared secrets don't match!");
     }
@@ -398,13 +397,88 @@ mod tests {
         assert!(lt, "Elements out of range");
     }
 
+
+    #[test]
+    fn test_getnoise() {
+        let mut seed: [u8; SYMBYTES] = [0; SYMBYTES];
+        let mut s: PolyVec = polyvec_init();
+        let mut sml: bool = true;
+        let mut t0: bool = true;
+        let mut t1: bool = true;
+        let mut tn1: bool = true;
+        let e0: Elem = fp_init();
+        let e1: Elem = [0x01, 0x0, 0x0, 0x0];
+        let mut qm1: Elem = fp_init();
+        sub(&mut qm1, e0, e1);
+
+        getrandom::getrandom(&mut seed).expect("getrandom failed");
+
+        s = getnoise(&seed, 0);
+
+        for i in 0..N {
+            for j in 0..D {
+                t0 = cmp(s[i][j], e0) == 0x00;
+                t1 = cmp(s[i][j], e1) == 0x00;
+                tn1 = cmp(s[i][j], qm1) == 0x00;
+                sml &= (t0 | t1 | tn1);
+            }
+        }
+
+        assert!(sml, "Elements out of range");
+    }
+
+    #[test]
+    fn test_rec() {
+        let s0: Poly = [TQQ.clone(); D];
+        let s1: Poly = [HQ.clone(); D];
+        let s2: Poly = [QQ.clone(); D];
+        let s3: Poly = [fp_init(); D];
+        let b0: [u8; SYMBYTES] = [0x00; SYMBYTES];
+        let b1: [u8; SYMBYTES] = [0xff; SYMBYTES];
+        let mut rb: [u8; SYMBYTES] = [0; SYMBYTES];
+
+        rec(&s3, &mut rb);
+        assert_eq!(rb, b0);
+
+        rec(&s2, &mut rb);
+        assert_eq!(rb, b1);
+
+        rec(&s1, &mut rb);
+        assert_eq!(rb, b1);
+
+        rec(&s0, &mut rb);
+        assert_eq!(rb, b1);
+    }
+
+
+    #[test]
+    fn test_round() {
+        let s0: Elem = TQQ.clone();
+        let s1: Elem = HQ.clone();
+        let s2: Elem = QQ.clone();
+        let s3: Elem = fp_init();
+        let b0: u8 = 0x00;
+        let b1: u8 = 0x01;
+        let mut rb: u8 = 0;
+
+        rb = round(s3);
+        assert_eq!(rb, b0);
+
+        rb = round(s2);
+        assert_eq!(rb, b1);
+
+        rb = round(s1);
+        assert_eq!(rb, b1);
+
+        rb = round(s0);
+        assert_eq!(rb, b1);
+    }
+
     #[test]
     fn speed_nike() {
         let mut seed: [u8; SYMBYTES] = [0; SYMBYTES];
-        let mut pkp: [u8; PUBLICKEY_BYTES * 2] = [0; PUBLICKEY_BYTES * 2];
-        let mut skp: [u8; SECRETKEY_BYTES * 2] = [0; SECRETKEY_BYTES * 2];
-        let mut pkr: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
-        let mut pkl: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
+        let mut pkp: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
+        let mut skp: [u8; SECRETKEY_BYTES] = [0; SECRETKEY_BYTES];
         let mut ss: [u8; SYMBYTES] = [0; SYMBYTES];
         let mut t: [u64; NRUNS] = [0; NRUNS];
 
@@ -412,36 +486,24 @@ mod tests {
 
         for i in 0..NRUNS {
             t[i] = cpucycles();
-            (skp, pkp) = kg(seed);
+            (skp, pkp) = kg(seed, true);
         }
         println!("keygen: ");
         print_res(&mut t);
 
-        pkr.copy_from_slice(&pkp[PUBLICKEY_BYTES..]);
-        pkl.copy_from_slice(&pkp[..PUBLICKEY_BYTES]);
-
         for i in 0..NRUNS {
             t[i] = cpucycles();
-            ss = skey_deriv(pkl, skp, seed, true);
+            ss = skey_deriv(pkp, skp, seed, true);
         }
         println!("skey_deriv (left): ");
-        print_res(&mut t);
-
-        for i in 0..NRUNS {
-            t[i] = cpucycles();
-            ss = skey_deriv(pkr, skp, seed, true);
-        }
-        println!("skey_deriv (right): ");
         print_res(&mut t);
     }
 
     #[test]
     fn speed_full() {
         let mut seed: [u8; SYMBYTES] = [0; SYMBYTES];
-        let mut pkp: [u8; PUBLICKEY_BYTES * 2] = [0; PUBLICKEY_BYTES * 2];
-        let mut skp: [u8; SECRETKEY_BYTES * 2] = [0; SECRETKEY_BYTES * 2];
-        let mut pkr: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
-        let mut pkl: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
+        let mut pkp: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
+        let mut skp: [u8; SECRETKEY_BYTES] = [0; SECRETKEY_BYTES];
         let mut ss: [u8; SYMBYTES] = [0; SYMBYTES];
         let mut t: [u64; NRUNS] = [0; NRUNS];
         let mut a: [PolyVec; N] = [polyvec_init(); N];
@@ -486,26 +548,16 @@ mod tests {
 
         for i in 0..NRUNS {
             t[i] = cpucycles();
-            (skp, pkp) = kg(seed);
+            (skp, pkp) = kg(seed, true);
         }
         println!("keygen: ");
         print_res(&mut t);
 
-        pkr.copy_from_slice(&pkp[PUBLICKEY_BYTES..]);
-        pkl.copy_from_slice(&pkp[..PUBLICKEY_BYTES]);
-
         for i in 0..NRUNS {
             t[i] = cpucycles();
-            ss = skey_deriv(pkl, skp, seed, true);
+            ss = skey_deriv(pkp, skp, seed, true);
         }
-        println!("skey_deriv (left): ");
-        print_res(&mut t);
-
-        for i in 0..NRUNS {
-            t[i] = cpucycles();
-            ss = skey_deriv(pkr, skp, seed, true);
-        }
-        println!("skey_deriv (right): ");
+        println!("skey_deriv: ");
         print_res(&mut t);
     }
 }
