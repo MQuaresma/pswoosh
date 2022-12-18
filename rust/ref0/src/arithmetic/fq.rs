@@ -1,7 +1,7 @@
 pub const NLIMBS: usize = 4;
 pub type Elem = [u64; NLIMBS];
 const K: usize = 214; // bit size of q
-pub const ELEM_BYTES: usize = K/8+2; //FIXME
+pub const ELEM_BYTES: usize = K/8+1;
 const RAD: usize = 64; //radix
 
 /* Q = 2^214-255 */   /* 2^0              2^64               2^128              2^192   */
@@ -370,23 +370,24 @@ pub fn cmp(a: Elem, b: Elem) -> u8 {
     r
 }
 
-/* Converts stream of bytes into value of type Elem
- *
+/*
+ * Converts stream of bytes into value of type Elem
  */
 pub fn elem_frombytes(ep: &[u8; ELEM_BYTES]) -> Elem {
     let mut e: Elem = fp_init();
+    let mut t: [u8; 8] = [0; 8];
 
     for i in 0..NLIMBS-1 {
         e[i] = u64::from_le_bytes(ep[8*i..8*i+8].try_into().unwrap());
     }
 
-    e[NLIMBS-1] = u32::from_le_bytes(ep[8*(NLIMBS-1)..8*(NLIMBS-1)+4].try_into().unwrap()) as u64;
+    t[0..ELEM_BYTES-8*(NLIMBS-1)].copy_from_slice(&ep[8*(NLIMBS-1)..8*(NLIMBS-1)+3]);
+    e[NLIMBS-1] = u64::from_le_bytes(t);
 
     e
 }
-/* Converts field element into a byte buffer
- *
- * n.b: currently exporting one extra unnecessary/zero byte for simplicity reasons
+/*
+ * Converts field element into a byte buffer
  */
 pub fn elem_tobytes(e: Elem) -> [u8; ELEM_BYTES] {
     let mut r: [u8; ELEM_BYTES] = [0; ELEM_BYTES];
@@ -395,7 +396,7 @@ pub fn elem_tobytes(e: Elem) -> [u8; ELEM_BYTES] {
         r[8*i..8*i+8].copy_from_slice(&e[i].to_le_bytes());
     }
 
-    r[8*(NLIMBS-1)..8*(NLIMBS-1)+4].copy_from_slice(&e[NLIMBS-1].to_le_bytes()[0..4]); //remove trailing bytes
+    r[8*(NLIMBS-1)..8*(NLIMBS-1)+3].copy_from_slice(&e[NLIMBS-1].to_le_bytes()[0..3]); //remove trailing bytes
 
     r
 }
