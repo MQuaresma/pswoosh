@@ -551,21 +551,21 @@ mod tests {
 
         for i in 0..NRUNS {
             t[i] = rdtsc();
-            poly_ntt(&mut s[i]);
+            poly_ntt(&mut s[i % N]);
         }
         println!("poly_ntt (cycles):");
         print_res(&mut t);
 
         for i in 0..NRUNS {
             t[i] = rdtsc();
-            poly_invntt(&mut s[i]);
+            poly_invntt(&mut s[i % N]);
         }
         println!("poly_invntt (cycles):");
         print_res(&mut t);
 
         for i in 0..NRUNS {
             t[i] = rdtsc();
-            s[0] = polyvec_basemul_acc(a[0], a[1]);
+            s[i % N] = polyvec_basemul_acc(a[i % N], a[(i + 1) % N]);
         }
         println!("polyvec_basemul_acc (cycles): ");
         print_res(&mut t);
@@ -598,18 +598,18 @@ mod tests {
 
         start = Instant::now();
         for i in 0..NRUNS {
-            t[i] = start.elapsed().as_millis();
+            t[i] = start.elapsed().as_nanos();
             (skp, pkp) = kg(seed, true);
         }
-        println!("keygen (ms): ");
+        println!("keygen (ns): ");
         print_res_u128(&mut t);
 
         start = Instant::now();
         for i in 0..NRUNS {
-            t[i] = start.elapsed().as_millis();
+            t[i] = start.elapsed().as_nanos();
             ss = skey_deriv(pkp, skp, seed, true);
         }
-        println!("skey_deriv (ms): ");
+        println!("skey_deriv (ns): ");
         print_res_u128(&mut t);
     }
 
@@ -628,58 +628,58 @@ mod tests {
 
         start = Instant::now();
         for i in 0..NRUNS {
-            t[i] = start.elapsed().as_millis();
+            t[i] = start.elapsed().as_nanos();
             a = genmatrix(&seed, false);
         }
-        println!("genmatrix (ms): ");
+        println!("genmatrix (ns): ");
         print_res_u128(&mut t);
 
         start = Instant::now();
         for i in 0..NRUNS {
-            t[i] = start.elapsed().as_millis();
+            t[i] = start.elapsed().as_nanos();
             s = getnoise(&mut seed, 0);
         }
-        println!("getnoise (ms): ");
+        println!("getnoise (ns): ");
         print_res_u128(&mut t);
 
         start = Instant::now();
         for i in 0..NRUNS {
-            t[i] = start.elapsed().as_millis();
+            t[i] = start.elapsed().as_nanos();
             poly_ntt(&mut s[i % N]);
         }
-        println!("poly_ntt (ms):");
+        println!("poly_ntt (ns):");
         print_res_u128(&mut t);
 
         start = Instant::now();
         for i in 0..NRUNS {
-            t[i] = start.elapsed().as_millis();
+            t[i] = start.elapsed().as_nanos();
             poly_invntt(&mut s[i % N]);
         }
-        println!("poly_invntt (ms):");
+        println!("poly_invntt (ns):");
         print_res_u128(&mut t);
 
         start = Instant::now();
         for i in 0..NRUNS {
-            t[i] = start.elapsed().as_millis();
+            t[i] = start.elapsed().as_nanos();
             s[i % N] = polyvec_basemul_acc(a[i % N], a[(i + 1) % N]);
         }
-        println!("polyvec_basemul_acc (ms): ");
+        println!("polyvec_basemul_acc (ns): ");
         print_res_u128(&mut t);
 
         start = Instant::now();
         for i in 0..NRUNS {
-            t[i] = start.elapsed().as_millis();
+            t[i] = start.elapsed().as_nanos();
             (skp, pkp) = kg(seed, true);
         }
-        println!("keygen (ms): ");
+        println!("keygen (ns): ");
         print_res_u128(&mut t);
 
         start = Instant::now();
         for i in 0..NRUNS {
-            t[i] = start.elapsed().as_millis();
+            t[i] = start.elapsed().as_nanos();
             ss = skey_deriv(pkp, skp, seed, true);
         }
-        println!("skey_deriv (ms): ");
+        println!("skey_deriv (ns): ");
         print_res_u128(&mut t);
     }
 }
