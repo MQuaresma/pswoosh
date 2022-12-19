@@ -242,12 +242,13 @@ fn cbd(buf: &[u8; NOISE_BYTES], p: &mut PolyVec) {
             for k in 0..4 {
                 t = c & 0x3;
                 m = t as u64;
+
                 unsafe {
-                    asm!("popcnt {m}, {m}", // if t=0b11 then m=2 if else m=1
+                    asm!("popcnt {m}, {m}", // if t=0b11 then m=2 if t=0b00 then m=0 else m=1
                          m = inout(reg) m,
                     );
                 }
-                m = ((m << 61) as i64 >> 63) as u64;
+                m = ((m << 62) as i64 >> 63) as u64;
 
                 p[i][4*j + k] = Q.clone();
 
@@ -290,9 +291,9 @@ fn getnoise(seed: &[u8; SYMBYTES], nonce: u8) -> PolyVec {
 }
 
 /*
- * Tranpose matrix (testing purposes only)
+ * Transpose matrix (testing purposes only)
  */
-fn tranpose(a: &[PolyVec;N], at: &mut [PolyVec; N]) {
+fn transpose(a: &[PolyVec;N], at: &mut [PolyVec; N]) {
     for i in 0..N {
         for j in 0..N {
             at[i][j] = a[j][i];
@@ -382,7 +383,7 @@ mod tests {
         a0 = genmatrix(&seed, false);
         a1 = genmatrix(&seed, true);
 
-        tranpose(&a1, &mut at);
+        transpose(&a1, &mut at);
 
         assert!(a0 == at, "Matrices do not match");
 
