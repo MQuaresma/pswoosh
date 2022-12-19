@@ -1,13 +1,38 @@
 use core::arch::x86_64;
 
-pub const NRUNS: usize = 10;
+pub const NRUNS: usize = 100;
 
-pub fn cpucycles() -> u64 {
-    let res: u64;
-    unsafe {
-        res = x86_64::_rdtsc();
+fn median_u128(t: &mut [u128; NRUNS]) -> u128 {
+    t.sort();
+
+    if(NRUNS % 2 == 1) {
+        t[NRUNS/2]
+    } else {
+        (t[NRUNS/2-1] + t[NRUNS/2+1])/2
     }
-    res
+}
+
+fn average_u128(t: &[u128; NRUNS]) -> u128 {
+    let mut a: u128 = 0;
+
+    for i in 0..NRUNS {
+        a += t[i];
+    }
+
+    a/(NRUNS as u128)
+}
+
+pub fn print_res_u128(t: &mut [u128; NRUNS]) {
+    for i in 0..NRUNS-1 {
+        t[i] = t[i+1] - t[i];
+    }
+
+    println!("average: {}", average_u128(t));
+    println!("median: {}\n", median_u128(t));
+}
+
+pub fn rdtsc() -> u64 {
+    unsafe { x86_64::_rdtsc() }
 }
 
 fn median(t: &mut [u64; NRUNS]) -> u64 {
@@ -18,7 +43,6 @@ fn median(t: &mut [u64; NRUNS]) -> u64 {
     } else {
         (t[NRUNS/2-1] + t[NRUNS/2+1])/2
     }
-    
 }
 
 fn average(t: &[u64; NRUNS]) -> u64 {
@@ -37,6 +61,5 @@ pub fn print_res(t: &mut [u64; NRUNS]) {
     }
 
     println!("average: {}", average(t));
-    println!("median: {}", median(t));
-    println!();
+    println!("median: {}\n", median(t));
 }

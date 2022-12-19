@@ -370,6 +370,7 @@ mod tests {
     use super::*;
     use getrandom;
     use crate::util::*;
+    use std::time::*;
 
     #[test]
     fn test_scheme() {
@@ -508,17 +509,17 @@ mod tests {
         getrandom::getrandom(&mut seed).expect("getrandom failed");
 
         for i in 0..NRUNS {
-            t[i] = cpucycles();
+            t[i] = rdtsc();
             (skp, pkp) = kg(seed, true);
         }
-        println!("keygen: ");
+        println!("keygen (cycles): ");
         print_res(&mut t);
 
         for i in 0..NRUNS {
-            t[i] = cpucycles();
+            t[i] = rdtsc();
             ss = skey_deriv(pkp, skp, seed, true);
         }
-        println!("skey_deriv (left): ");
+        println!("skey_deriv (cycles): ");
         print_res(&mut t);
     }
 
@@ -535,52 +536,150 @@ mod tests {
         getrandom::getrandom(&mut seed).expect("getrandom failed");
 
         for i in 0..NRUNS {
-            t[i] = cpucycles();
+            t[i] = rdtsc();
             a = genmatrix(&seed, false);
         }
-        println!("genmatrix: ");
+        println!("genmatrix (cycles): ");
         print_res(&mut t);
 
         for i in 0..NRUNS {
-            t[i] = cpucycles();
+            t[i] = rdtsc();
             s = getnoise(&mut seed, 0);
         }
-        println!("getnoise: ");
+        println!("getnoise (cycles): ");
         print_res(&mut t);
 
         for i in 0..NRUNS {
-            t[i] = cpucycles();
+            t[i] = rdtsc();
             poly_ntt(&mut s[i]);
         }
-        println!("poly_ntt:");
+        println!("poly_ntt (cycles):");
         print_res(&mut t);
 
         for i in 0..NRUNS {
-            t[i] = cpucycles();
+            t[i] = rdtsc();
             poly_invntt(&mut s[i]);
         }
-        println!("poly_invntt:");
+        println!("poly_invntt (cycles):");
         print_res(&mut t);
 
         for i in 0..NRUNS {
-            t[i] = cpucycles();
+            t[i] = rdtsc();
             s[0] = polyvec_basemul_acc(a[0], a[1]);
         }
-        println!("polyvec_basemul_acc: ");
+        println!("polyvec_basemul_acc (cycles): ");
         print_res(&mut t);
 
         for i in 0..NRUNS {
-            t[i] = cpucycles();
+            t[i] = rdtsc();
             (skp, pkp) = kg(seed, true);
         }
-        println!("keygen: ");
+        println!("keygen (cycles): ");
         print_res(&mut t);
 
         for i in 0..NRUNS {
-            t[i] = cpucycles();
+            t[i] = rdtsc();
             ss = skey_deriv(pkp, skp, seed, true);
         }
-        println!("skey_deriv: ");
+        println!("skey_deriv (cycles): ");
         print_res(&mut t);
+    }
+
+    #[test]
+    fn time_nike() {
+        let mut seed: [u8; SYMBYTES] = [0; SYMBYTES];
+        let mut pkp: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
+        let mut skp: [u8; SECRETKEY_BYTES] = [0; SECRETKEY_BYTES];
+        let mut ss: [u8; SYMBYTES] = [0; SYMBYTES];
+        let mut t: [u128; NRUNS] = [0; NRUNS];
+        let mut start: Instant;
+
+        getrandom::getrandom(&mut seed).expect("getrandom failed");
+
+        start = Instant::now();
+        for i in 0..NRUNS {
+            t[i] = start.elapsed().as_millis();
+            (skp, pkp) = kg(seed, true);
+        }
+        println!("keygen (ms): ");
+        print_res_u128(&mut t);
+
+        start = Instant::now();
+        for i in 0..NRUNS {
+            t[i] = start.elapsed().as_millis();
+            ss = skey_deriv(pkp, skp, seed, true);
+        }
+        println!("skey_deriv (ms): ");
+        print_res_u128(&mut t);
+    }
+
+    #[test]
+    fn time_full() {
+        let mut seed: [u8; SYMBYTES] = [0; SYMBYTES];
+        let mut pkp: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
+        let mut skp: [u8; SECRETKEY_BYTES] = [0; SECRETKEY_BYTES];
+        let mut ss: [u8; SYMBYTES] = [0; SYMBYTES];
+        let mut t: [u128; NRUNS] = [0; NRUNS];
+        let mut a: [PolyVec; N] = [polyvec_init(); N];
+        let mut s: PolyVec = polyvec_init();
+        let mut start: Instant;
+
+        getrandom::getrandom(&mut seed).expect("getrandom failed");
+
+        start = Instant::now();
+        for i in 0..NRUNS {
+            t[i] = start.elapsed().as_millis();
+            a = genmatrix(&seed, false);
+        }
+        println!("genmatrix (ms): ");
+        print_res_u128(&mut t);
+
+        start = Instant::now();
+        for i in 0..NRUNS {
+            t[i] = start.elapsed().as_millis();
+            s = getnoise(&mut seed, 0);
+        }
+        println!("getnoise (ms): ");
+        print_res_u128(&mut t);
+
+        start = Instant::now();
+        for i in 0..NRUNS {
+            t[i] = start.elapsed().as_millis();
+            poly_ntt(&mut s[i % N]);
+        }
+        println!("poly_ntt (ms):");
+        print_res_u128(&mut t);
+
+        start = Instant::now();
+        for i in 0..NRUNS {
+            t[i] = start.elapsed().as_millis();
+            poly_invntt(&mut s[i % N]);
+        }
+        println!("poly_invntt (ms):");
+        print_res_u128(&mut t);
+
+        start = Instant::now();
+        for i in 0..NRUNS {
+            t[i] = start.elapsed().as_millis();
+            s[i % N] = polyvec_basemul_acc(a[i % N], a[(i + 1) % N]);
+        }
+        println!("polyvec_basemul_acc (ms): ");
+        print_res_u128(&mut t);
+
+        start = Instant::now();
+        for i in 0..NRUNS {
+            t[i] = start.elapsed().as_millis();
+            (skp, pkp) = kg(seed, true);
+        }
+        println!("keygen (ms): ");
+        print_res_u128(&mut t);
+
+        start = Instant::now();
+        for i in 0..NRUNS {
+            t[i] = start.elapsed().as_millis();
+            ss = skey_deriv(pkp, skp, seed, true);
+        }
+        println!("skey_deriv (ms): ");
+        print_res_u128(&mut t);
     }
 }
