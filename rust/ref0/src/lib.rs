@@ -124,6 +124,26 @@ fn rec(kv: &Poly, k: &mut [u8; SYMBYTES]) {
 }
 
 /*
+ * Generates a public key from matrix A, secret and error vector
+ */
+fn gen_pk(a: &[PolyVec; N], s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
+    let mut tmp: PolyVec = polyvec_init();
+
+    polyvec_ntt(s);
+
+    for i in 0..N {
+        tmp[i] = polyvec_basemul_acc(a[i], *s);
+    }
+
+    polyvec_invntt(&mut tmp);
+    polyvec_invntt(s);
+
+    let pk: PolyVec = polyvec_add(tmp, *e);
+
+    pk
+}
+
+/*
  * Generates a public key from matrix A, secret and error vector: sT * A + eT
  */
 fn gen_pkl(a: &[PolyVec; N], s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
@@ -137,6 +157,7 @@ fn gen_pkl(a: &[PolyVec; N], s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
     }
 
     polyvec_invntt(&mut tmp);
+    polyvec_invntt(s);
 
     // pk = (sT * A) + eT
     let pk: PolyVec = polyvec_add(tmp, *e);
@@ -158,6 +179,7 @@ fn gen_pkr(a: &[PolyVec; N], s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
     }
 
     polyvec_invntt(&mut tmp);
+    polyvec_invntt(s);
 
     // pk = (A * s) + e
     let mut pk: PolyVec = polyvec_add(tmp, *e);
