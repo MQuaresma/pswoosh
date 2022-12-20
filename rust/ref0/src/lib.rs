@@ -18,12 +18,13 @@ const RATE: usize = 136;
  * x Make rej_sampling constant time
  * x Implement gen_matrix
  * x Replace dummy code in XOF functions with call to library (RustCrypto)
- * - Domain separation for XOF functions
  * x Fix cmp in fq.rs
  * x Implement getnoise
  * x Compute BARR constant for barret reduction
  * x Implement polyvec_ntt
+ * - Domain separation for XOF functions
  * - Integrate NIZK
+ * - Implement schoolbook multiplication for testing
  */
 
 /*
@@ -68,17 +69,28 @@ fn kg(seed: [u8; SYMBYTES], f: bool) -> ([u8; SECRETKEY_BYTES], [u8; PUBLICKEY_B
 /*
  * Key derivation wrapper to deserialize the vectors of polynomials
  */
-pub fn skey_deriv(pkp: [u8; PUBLICKEY_BYTES], skp: [u8; SECRETKEY_BYTES], seed: [u8; SYMBYTES], f: bool) -> [u8; SYMBYTES] {
-    let mut pk: PolyVec = polyvec_frombytes(&pkp);
+pub fn skey_deriv(pkp1: [u8; PUBLICKEY_BYTES], pkp2: [u8; PUBLICKEY_BYTES], skp: [u8; SECRETKEY_BYTES], seed: [u8; SYMBYTES], f: bool) -> [u8; SYMBYTES] {
+    let mut pk: PolyVec = polyvec_frombytes(&pkp2);
     let mut s: PolyVec = polyvec_frombytes(&skp);
+    let mut rin: [u8; POLYVEC_BYTES * 2] = [0; POLYVEC_BYTES * 2];
 
-    sdk(&mut pk, &mut s, seed, f)
+    if !f {
+        rin[0..POLYVEC_BYTES].copy_from_slice(&pkp1);
+        rin[POLYVEC_BYTES..POLYVEC_BYTES*2].copy_from_slice(&pkp2);
+    } else {
+        rin[0..POLYVEC_BYTES].copy_from_slice(&pkp2);
+        rin[POLYVEC_BYTES..POLYVEC_BYTES*2].copy_from_slice(&pkp1);
+    }
+
+    let r = genoffset(&rin);
+
+    sdk(&mut pk, &mut s, r, seed, f)
 }
 
 /*
  * Shared key derivation
  */
-fn sdk(pk: &mut PolyVec, s: &mut PolyVec, seed: [u8; SYMBYTES], f: bool) -> [u8; SYMBYTES] {
+fn sdk(pk: &mut PolyVec, s: &mut PolyVec, r: Poly, seed: [u8; SYMBYTES], f: bool) -> [u8; SYMBYTES] {
     let mut kv: Poly;
     let mut k: [u8; SYMBYTES] = [0; SYMBYTES];
 
@@ -95,16 +107,7 @@ fn sdk(pk: &mut PolyVec, s: &mut PolyVec, seed: [u8; SYMBYTES], f: bool) -> [u8;
 
     poly_invntt(&mut kv);
 
-    /*
-    let mut r_in: [u8; POLYVEC_BYTES * 2] = [0; POLYVEC_BYTES * 2];
-
-    r_in[0..POLYVEC_BYTES].copy_from_slice(&polyvec_tobytes(pk));
-    r_in[POLYVEC_BYTES..POLYVEC_BYTES*2].copy_from_slice(&polyvec_tobytes(pk2));
-
-    let r = gen_randoffset(&r_in);   // r = H(pk, pk2);
-
-    k = poly_add(k, r);
-     */
+    kv = poly_add(kv, r);
 
     rec(&kv, &mut k);
 
@@ -229,7 +232,7 @@ fn rej_sampling(buf: &[u8; RATE], p: &mut Poly, mut offset: usize) -> usize {
 }
 
 
-fn gen_randoffset(inp: &[u8; POLYVEC_BYTES * 2]) -> Poly {
+fn genoffset(inp: &[u8; POLYVEC_BYTES * 2]) -> Poly {
     let mut buf: [u8; RATE] = [0; RATE];
     let mut r: Poly = poly_init();
     let mut ctr: usize = 0;
@@ -387,8 +390,8 @@ mod tests {
         (sk1, pk1) = kg(seed, true);
         (sk2, pk2) = kg(seed, false);
 
-        ss1 = skey_deriv(pk2, sk1, seed, true);
-        ss2 = skey_deriv(pk1, sk2, seed, false);
+        ss1 = skey_deriv(pk1, pk2, sk1, seed, true);
+        ss2 = skey_deriv(pk2, pk1, sk2, seed, false);
 
         assert_eq!(ss1, ss2, "ERROR: shared secrets don't match!");
     }
@@ -416,6 +419,22 @@ mod tests {
                     lt &= (cmp(a0[i][j][k], Q) == 0x80);
                 }
             }
+        }
+
+        assert!(lt, "Elements out of range");
+    }
+
+    #[test]
+    fn test_genoffset() {
+        let mut seed: [u8; POLYVEC_BYTES*2] = [0; POLYVEC_BYTES*2];
+        let mut s: Poly = poly_init();
+        let mut lt: bool = true;
+
+        getrandom::getrandom(&mut seed).expect("getrandom failed");
+        s = genoffset(&seed);
+
+        for i in 0..D {
+            lt &= (cmp(s[i], Q) == 0x80);
         }
 
         assert!(lt, "Elements out of range");
@@ -517,7 +536,7 @@ mod tests {
 
         for i in 0..NRUNS {
             t[i] = rdtsc();
-            ss = skey_deriv(pkp, skp, seed, true);
+            ss = skey_deriv(pkp, pkp, skp, seed, true);
         }
         println!("skey_deriv (cycles): ");
         print_res(&mut t);
@@ -528,6 +547,7 @@ mod tests {
         let mut seed: [u8; SYMBYTES] = [0; SYMBYTES];
         let mut pkp: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
         let mut skp: [u8; SECRETKEY_BYTES] = [0; SECRETKEY_BYTES];
+        let mut rin: [u8; POLYVEC_BYTES * 2] = [0; POLYVEC_BYTES * 2];
         let mut ss: [u8; SYMBYTES] = [0; SYMBYTES];
         let mut t: [u64; NRUNS] = [0; NRUNS];
         let mut a: [PolyVec; N] = [polyvec_init(); N];
@@ -547,6 +567,13 @@ mod tests {
             s = getnoise(&mut seed, 0);
         }
         println!("getnoise (cycles): ");
+        print_res(&mut t);
+
+        for i in 0..NRUNS {
+            t[i] = rdtsc();
+            s[i % N] = genoffset(&rin);
+        }
+        println!("genoffset (cycles): ");
         print_res(&mut t);
 
         for i in 0..NRUNS {
@@ -579,7 +606,7 @@ mod tests {
 
         for i in 0..NRUNS {
             t[i] = rdtsc();
-            ss = skey_deriv(pkp, skp, seed, true);
+            ss = skey_deriv(pkp, pkp, skp, seed, true);
         }
         println!("skey_deriv (cycles): ");
         print_res(&mut t);
@@ -607,7 +634,7 @@ mod tests {
         start = Instant::now();
         for i in 0..NRUNS {
             t[i] = start.elapsed().as_nanos();
-            ss = skey_deriv(pkp, skp, seed, true);
+            ss = skey_deriv(pkp, pkp, skp, seed, true);
         }
         println!("skey_deriv (ns): ");
         print_res_u128(&mut t);
@@ -618,6 +645,7 @@ mod tests {
         let mut seed: [u8; SYMBYTES] = [0; SYMBYTES];
         let mut pkp: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
         let mut skp: [u8; SECRETKEY_BYTES] = [0; SECRETKEY_BYTES];
+        let mut rin: [u8; POLYVEC_BYTES * 2] = [0; POLYVEC_BYTES * 2];
         let mut ss: [u8; SYMBYTES] = [0; SYMBYTES];
         let mut t: [u128; NRUNS] = [0; NRUNS];
         let mut a: [PolyVec; N] = [polyvec_init(); N];
@@ -640,6 +668,14 @@ mod tests {
             s = getnoise(&mut seed, 0);
         }
         println!("getnoise (ns): ");
+        print_res_u128(&mut t);
+
+        start = Instant::now();
+        for i in 0..NRUNS {
+            t[i] = start.elapsed().as_nanos();
+            s[i % N] = genoffset(&rin);
+        }
+        println!("genoffset (ns): ");
         print_res_u128(&mut t);
 
         start = Instant::now();
@@ -677,7 +713,7 @@ mod tests {
         start = Instant::now();
         for i in 0..NRUNS {
             t[i] = start.elapsed().as_nanos();
-            ss = skey_deriv(pkp, skp, seed, true);
+            ss = skey_deriv(pkp, pkp, skp, seed, true);
         }
         println!("skey_deriv (ns): ");
         print_res_u128(&mut t);
