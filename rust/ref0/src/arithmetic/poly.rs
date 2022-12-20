@@ -22,15 +22,6 @@ pub fn poly_add(a: Poly, b: Poly) -> Poly {
     c
 }
 
-pub fn poly_sub(a: Poly, b: Poly) -> Poly {
-    let mut c: Poly = poly_init();
-
-    for i in 0..D {
-        sub(&mut c[i], a[i], b[i]);
-    }
-
-    c
-}
 
 pub fn poly_fromM(ap: Poly) -> Poly {
     ap
@@ -41,13 +32,28 @@ pub fn poly_toM(ap: Poly) -> Poly {
 }
 
 /*
+ * Schoolbook multiplication in polynomials
+
+fn schoolbook_mul(a: Poly, b: Poly) -> Poly {
+    let mut c: Poly = poly_init();
+    let mut t: Elem = fp_init();
+
+    for i in 0..D {
+        for j in 0..D {
+            fp_mul(&mut t, a[i], b[i]);
+        }
+    }
+}
+ */
+
+/*
  * Base-multiplication in a polynomials
  */
 pub fn poly_basemul(a: Poly, b: Poly) -> Poly {
     let mut c: Poly = poly_init();
     let mut t0: Elem = fp_init();
     let mut t1: Elem = fp_init();
-    let mut zeta: Elem = fp_init();
+    let mut zeta: Elem;
     let mut zoff: usize = D/4;
     let mut i: usize = 0;
 
@@ -94,7 +100,7 @@ pub fn poly_ntt(a: &mut Poly) {
     let mut t: Elem;
     let mut r: Elem = fp_init();
 
-    for i in 0..7 {
+    for _i in 0..7 {
         off = 0;
         while(off < D) {
             zoff += 1;
@@ -200,7 +206,7 @@ mod tests {
         let mut c: Poly = poly_init();
         let mut base: Elem = [0xffffffffffffff00, 0xffffffffffffffff, 0xffffffffffffffff, 0x00000000003fffff];
         let mut off: Elem = [0x7f, 0x0, 0x0, 0x0];
-        let mut one: Elem = [0x01, 0x0, 0x0, 0x0];
+        let one: Elem = [0x01, 0x0, 0x0, 0x0];
         let mut t: Elem = fp_init();
 
         for i in 0..128 {

@@ -15,7 +15,7 @@ fn median_u128(t: &mut [u128; NRUNS]) -> u128 {
 fn average_u128(t: &[u128; NRUNS]) -> u128 {
     let mut a: u128 = 0;
 
-    for i in 0..NRUNS {
+    for i in 0..NRUNS-1 {
         a += t[i];
     }
 

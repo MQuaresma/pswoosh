@@ -22,9 +22,10 @@ const RATE: usize = 136;
  * x Implement getnoise
  * x Compute BARR constant for barret reduction
  * x Implement polyvec_ntt
- * - Domain separation for XOF functions
  * - Integrate NIZK
  * - Implement schoolbook multiplication for testing
+ * - Domain separation for XOF functions
+ * - Pre-compute in Montgomery domain for fp_mul
  */
 
 /*
@@ -41,8 +42,8 @@ pub fn keygen(seed: [u8; SYMBYTES], f:bool) -> ([u8; SECRETKEY_BYTES], [u8; PUBL
 fn kg(seed: [u8; SYMBYTES], f: bool) -> ([u8; SECRETKEY_BYTES], [u8; PUBLICKEY_BYTES]) {
     let mut nonce: u8 = 0;
     let mut noiseseed: [u8; SYMBYTES] = [0; SYMBYTES];
-    let mut skv: [u8; SECRETKEY_BYTES] = [0; SECRETKEY_BYTES];
-    let mut pkv: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
+    let skv: [u8; SECRETKEY_BYTES];
+    let pkv: [u8; PUBLICKEY_BYTES];
 
     getrandom::getrandom(&mut noiseseed).expect("getrandom failed");
 
@@ -69,7 +70,7 @@ fn kg(seed: [u8; SYMBYTES], f: bool) -> ([u8; SECRETKEY_BYTES], [u8; PUBLICKEY_B
 /*
  * Key derivation wrapper to deserialize the vectors of polynomials
  */
-pub fn skey_deriv(pkp1: [u8; PUBLICKEY_BYTES], pkp2: [u8; PUBLICKEY_BYTES], skp: [u8; SECRETKEY_BYTES], seed: [u8; SYMBYTES], f: bool) -> [u8; SYMBYTES] {
+pub fn skey_deriv(pkp1: [u8; PUBLICKEY_BYTES], pkp2: [u8; PUBLICKEY_BYTES], skp: [u8; SECRETKEY_BYTES], f: bool) -> [u8; SYMBYTES] {
     let mut pk: PolyVec = polyvec_frombytes(&pkp2);
     let mut s: PolyVec = polyvec_frombytes(&skp);
     let mut rin: [u8; POLYVEC_BYTES * 2] = [0; POLYVEC_BYTES * 2];
@@ -84,13 +85,13 @@ pub fn skey_deriv(pkp1: [u8; PUBLICKEY_BYTES], pkp2: [u8; PUBLICKEY_BYTES], skp:
 
     let r = genoffset(&rin);
 
-    sdk(&mut pk, &mut s, r, seed, f)
+    sdk(&mut pk, &mut s, r, f)
 }
 
 /*
  * Shared key derivation
  */
-fn sdk(pk: &mut PolyVec, s: &mut PolyVec, r: Poly, seed: [u8; SYMBYTES], f: bool) -> [u8; SYMBYTES] {
+fn sdk(pk: &mut PolyVec, s: &mut PolyVec, r: Poly, f: bool) -> [u8; SYMBYTES] {
     let mut kv: Poly;
     let mut k: [u8; SYMBYTES] = [0; SYMBYTES];
 
@@ -185,7 +186,7 @@ fn gen_pkr(a: &[PolyVec; N], s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
     polyvec_invntt(s);
 
     // pk = (A * s) + e
-    let mut pk: PolyVec = polyvec_add(tmp, *e);
+    let pk: PolyVec = polyvec_add(tmp, *e);
 
     pk
 }
@@ -196,7 +197,7 @@ fn gen_pkr(a: &[PolyVec; N], s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
 fn round(c: Elem) -> u8 {
     let mut l: u8;
     let mut h: u8;
-    let mut r: u8 = 0;
+    let r: u8;
 
     l = cmp(c, QQ);  //l = 0x80 if c < Q/4
     h = cmp(c, TQQ); //h = 0x01 if 3Q/4 < c
@@ -390,8 +391,8 @@ mod tests {
         (sk1, pk1) = kg(seed, true);
         (sk2, pk2) = kg(seed, false);
 
-        ss1 = skey_deriv(pk1, pk2, sk1, seed, true);
-        ss2 = skey_deriv(pk2, pk1, sk2, seed, false);
+        ss1 = skey_deriv(pk1, pk2, sk1, true);
+        ss2 = skey_deriv(pk2, pk1, sk2, false);
 
         assert_eq!(ss1, ss2, "ERROR: shared secrets don't match!");
     }
@@ -536,7 +537,7 @@ mod tests {
 
         for i in 0..NRUNS {
             t[i] = rdtsc();
-            ss = skey_deriv(pkp, pkp, skp, seed, true);
+            ss = skey_deriv(pkp, pkp, skp, true);
         }
         println!("skey_deriv (cycles): ");
         print_res(&mut t);
@@ -606,7 +607,7 @@ mod tests {
 
         for i in 0..NRUNS {
             t[i] = rdtsc();
-            ss = skey_deriv(pkp, pkp, skp, seed, true);
+            ss = skey_deriv(pkp, pkp, skp, true);
         }
         println!("skey_deriv (cycles): ");
         print_res(&mut t);
@@ -634,7 +635,7 @@ mod tests {
         start = Instant::now();
         for i in 0..NRUNS {
             t[i] = start.elapsed().as_nanos();
-            ss = skey_deriv(pkp, pkp, skp, seed, true);
+            ss = skey_deriv(pkp, pkp, skp, true);
         }
         println!("skey_deriv (ns): ");
         print_res_u128(&mut t);
@@ -713,7 +714,7 @@ mod tests {
         start = Instant::now();
         for i in 0..NRUNS {
             t[i] = start.elapsed().as_nanos();
-            ss = skey_deriv(pkp, pkp, skp, seed, true);
+            ss = skey_deriv(pkp, pkp, skp, true);
         }
         println!("skey_deriv (ns): ");
         print_res_u128(&mut t);
