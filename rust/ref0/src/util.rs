@@ -8,7 +8,7 @@ fn median_u128(t: &mut [u128; NRUNS]) -> u128 {
     if(NRUNS % 2 == 1) {
         t[NRUNS/2]
     } else {
-        (t[NRUNS/2-1] + t[NRUNS/2+1])/2
+        (t[NRUNS/2-1] + t[NRUNS/2])/2
     }
 }
 
@@ -41,14 +41,14 @@ fn median(t: &mut [u64; NRUNS]) -> u64 {
     if(NRUNS % 2 == 1) {
         t[NRUNS/2]
     } else {
-        (t[NRUNS/2-1] + t[NRUNS/2+1])/2
+        (t[NRUNS/2-1] + t[NRUNS/2])/2
     }
 }
 
 fn average(t: &[u64; NRUNS]) -> u64 {
     let mut a: u64 = 0;
 
-    for i in 0..NRUNS {
+    for i in 0..NRUNS-1 {
         a += t[i];
     }
 
