@@ -12,6 +12,8 @@ const PUBLICKEY_BYTES: usize = POLYVEC_BYTES;
 const SECRETKEY_BYTES: usize = POLYVEC_BYTES;
 const RATE: usize = 136;
 
+type Matrix = [PolyVec; N];
+
 /*
  * TODO:
  * x replaced hardcoded values with expressions
@@ -26,20 +28,30 @@ const RATE: usize = 136;
  * - Implement schoolbook multiplication for testing
  * - Domain separation for XOF functions
  * - Pre-compute in Montgomery domain for fp_mul
+ * x Pre-compute a matrix
  */
+
+pub fn setup(f: bool) -> Matrix {
+    let mut seed: [u8; SYMBYTES] = [0; SYMBYTES];
+    getrandom::getrandom(&mut seed).expect("getrandom failed");
+
+    let a: Matrix = genmatrix(&seed, f);
+
+    a
+}
 
 /*
  * Key generation wrapper
  */
-pub fn keygen(seed: [u8; SYMBYTES], f:bool) -> ([u8; SECRETKEY_BYTES], [u8; PUBLICKEY_BYTES]) {
-    kg(seed, f)
+pub fn keygen(a: &Matrix, f:bool) -> ([u8; SECRETKEY_BYTES], [u8; PUBLICKEY_BYTES]) {
+    kg(a, f)
 }
 
 
 /*
  * Generate secret and error vectors and compute public key
  */
-fn kg(seed: [u8; SYMBYTES], f: bool) -> ([u8; SECRETKEY_BYTES], [u8; PUBLICKEY_BYTES]) {
+fn kg(a: &Matrix, f: bool) -> ([u8; SECRETKEY_BYTES], [u8; PUBLICKEY_BYTES]) {
     let mut nonce: u8 = 0;
     let mut noiseseed: [u8; SYMBYTES] = [0; SYMBYTES];
     let skv: [u8; SECRETKEY_BYTES];
@@ -47,17 +59,15 @@ fn kg(seed: [u8; SYMBYTES], f: bool) -> ([u8; SECRETKEY_BYTES], [u8; PUBLICKEY_B
 
     getrandom::getrandom(&mut noiseseed).expect("getrandom failed");
 
-    let a: [PolyVec; N] = genmatrix(&seed, f);
-
     let mut s: PolyVec = getnoise(&noiseseed, nonce);
     nonce += 1;
     let mut e: PolyVec = getnoise(&noiseseed, nonce);
 
     let pk: PolyVec =
         if f {
-            gen_pkl(&a, &mut s, &mut e)
+            gen_pkl(a, &mut s, &mut e)
         } else {
-            gen_pkr(&a, &mut s, &mut e)
+            gen_pkr(a, &mut s, &mut e)
         };
 
     skv = polyvec_tobytes(s);
@@ -130,7 +140,7 @@ fn rec(kv: &Poly, k: &mut [u8; SYMBYTES]) {
 /*
  * Generates a public key from matrix A, secret and error vector
  */
-fn gen_pk(a: &[PolyVec; N], s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
+fn gen_pk(a: &Matrix, s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
     let mut tmp: PolyVec = polyvec_init();
 
     polyvec_ntt(s);
@@ -150,7 +160,7 @@ fn gen_pk(a: &[PolyVec; N], s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
 /*
  * Generates a public key from matrix A, secret and error vector: sT * A + eT
  */
-fn gen_pkl(a: &[PolyVec; N], s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
+fn gen_pkl(a: &Matrix, s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
     let mut tmp: PolyVec = polyvec_init();
 
     polyvec_ntt(s);
@@ -172,7 +182,7 @@ fn gen_pkl(a: &[PolyVec; N], s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
 /*
  * Generates a public key from matrix A, secret and error vector: A * s + e
  */
-fn gen_pkr(a: &[PolyVec; N], s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
+fn gen_pkr(a: &Matrix, s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
     let mut tmp: PolyVec = polyvec_init();
 
     polyvec_ntt(s);
@@ -319,7 +329,7 @@ fn getnoise(seed: &[u8; SYMBYTES], nonce: u8) -> PolyVec {
 /*
  * Transpose matrix (testing purposes only)
  */
-fn transpose(a: &[PolyVec;N], at: &mut [PolyVec; N]) {
+fn transpose(a: &[PolyVec;N], at: &mut Matrix) {
     for i in 0..N {
         for j in 0..N {
             at[i][j] = a[j][i];
@@ -331,9 +341,9 @@ fn transpose(a: &[PolyVec;N], at: &mut [PolyVec; N]) {
  * Generates matrix A from a seed
  * - t => generate A^T
  */
-fn genmatrix(seed: &[u8; SYMBYTES], t: bool) -> [PolyVec; N] {
+fn genmatrix(seed: &[u8; SYMBYTES], t: bool) -> Matrix {
     let mut buf: [u8; RATE] = [0; RATE];
-    let mut a: [PolyVec; N] = [polyvec_init(); N];
+    let mut a: Matrix = [polyvec_init(); N];
     let mut ctr: usize;
     let mut xof = Shake128::default();
     let mut rxof;
@@ -379,6 +389,8 @@ mod tests {
     #[test]
     fn test_scheme() {
         let mut seed: [u8; SYMBYTES] = [0; SYMBYTES];
+        let a: Matrix;
+        let mut at: Matrix = [polyvec_init(); N];
         let mut pk1: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
         let mut sk1: [u8; SECRETKEY_BYTES] = [0; SECRETKEY_BYTES];
         let mut pk2: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
@@ -386,11 +398,11 @@ mod tests {
         let mut ss1: [u8; SYMBYTES] = [0; SYMBYTES];
         let mut ss2: [u8; SYMBYTES] = [0; SYMBYTES];
 
-        getrandom::getrandom(&mut seed).expect("getrandom failed");
+        a = setup(true);
+        transpose(&a, &mut at);
 
-        (sk1, pk1) = kg(seed, true);
-        (sk2, pk2) = kg(seed, false);
-
+        (sk1, pk1) = kg(&a, true);
+        (sk2, pk2) = kg(&at, false);
         ss1 = skey_deriv(pk1, pk2, sk1, true);
         ss2 = skey_deriv(pk2, pk1, sk2, false);
 
@@ -400,9 +412,9 @@ mod tests {
     #[test]
     fn test_genmatrix() {
         let mut seed: [u8; SYMBYTES] = [0; SYMBYTES];
-        let mut a0: [PolyVec; N] = [polyvec_init(); N];
-        let mut a1: [PolyVec; N] = [polyvec_init(); N];
-        let mut at: [PolyVec; N] = [polyvec_init(); N];
+        let mut a0: Matrix = [polyvec_init(); N];
+        let mut a1: Matrix = [polyvec_init(); N];
+        let mut at: Matrix = [polyvec_init(); N];
         let mut lt: bool = true;
 
         getrandom::getrandom(&mut seed).expect("getrandom failed");
@@ -521,16 +533,22 @@ mod tests {
     #[test]
     fn speed_nike() {
         let mut seed: [u8; SYMBYTES] = [0; SYMBYTES];
+        let mut a: Matrix = [polyvec_init(); N];
         let mut pkp: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
         let mut skp: [u8; SECRETKEY_BYTES] = [0; SECRETKEY_BYTES];
         let mut ss: [u8; SYMBYTES] = [0; SYMBYTES];
         let mut t: [u64; NRUNS] = [0; NRUNS];
 
-        getrandom::getrandom(&mut seed).expect("getrandom failed");
+        for i in 0..NRUNS {
+            t[i] = rdtsc();
+            a = setup(true);
+        }
+        println!("setup (cycles): ");
+        print_res(&mut t);
 
         for i in 0..NRUNS {
             t[i] = rdtsc();
-            (skp, pkp) = kg(seed, true);
+            (skp, pkp) = kg(&a, true);
         }
         println!("keygen (cycles): ");
         print_res(&mut t);
@@ -551,7 +569,7 @@ mod tests {
         let mut rin: [u8; POLYVEC_BYTES * 2] = [0; POLYVEC_BYTES * 2];
         let mut ss: [u8; SYMBYTES] = [0; SYMBYTES];
         let mut t: [u64; NRUNS] = [0; NRUNS];
-        let mut a: [PolyVec; N] = [polyvec_init(); N];
+        let mut a: Matrix = [polyvec_init(); N];
         let mut s: PolyVec = polyvec_init();
 
         getrandom::getrandom(&mut seed).expect("getrandom failed");
@@ -600,7 +618,14 @@ mod tests {
 
         for i in 0..NRUNS {
             t[i] = rdtsc();
-            (skp, pkp) = kg(seed, true);
+            a = setup(true);
+        }
+        println!("setup (cycles): ");
+        print_res(&mut t);
+
+        for i in 0..NRUNS {
+            t[i] = rdtsc();
+            (skp, pkp) = kg(&a, true);
         }
         println!("keygen (cycles): ");
         print_res(&mut t);
@@ -616,18 +641,26 @@ mod tests {
     #[test]
     fn time_nike() {
         let mut seed: [u8; SYMBYTES] = [0; SYMBYTES];
+        let mut a: Matrix = [polyvec_init(); N];
         let mut pkp: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
         let mut skp: [u8; SECRETKEY_BYTES] = [0; SECRETKEY_BYTES];
         let mut ss: [u8; SYMBYTES] = [0; SYMBYTES];
         let mut t: [u128; NRUNS] = [0; NRUNS];
         let mut start: Instant;
 
-        getrandom::getrandom(&mut seed).expect("getrandom failed");
+        start = Instant::now();
+
+        for i in 0..NRUNS {
+            t[i] = start.elapsed().as_nanos();
+            a = setup(true);
+        }
+        println!("setup (ns): ");
+        print_res_u128(&mut t);
 
         start = Instant::now();
         for i in 0..NRUNS {
             t[i] = start.elapsed().as_nanos();
-            (skp, pkp) = kg(seed, true);
+            (skp, pkp) = kg(&a, true);
         }
         println!("keygen (ns): ");
         print_res_u128(&mut t);
@@ -646,10 +679,10 @@ mod tests {
         let mut seed: [u8; SYMBYTES] = [0; SYMBYTES];
         let mut pkp: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
         let mut skp: [u8; SECRETKEY_BYTES] = [0; SECRETKEY_BYTES];
-        let mut rin: [u8; POLYVEC_BYTES * 2] = [0; POLYVEC_BYTES * 2];
+        let rin: [u8; POLYVEC_BYTES * 2] = [0; POLYVEC_BYTES * 2];
         let mut ss: [u8; SYMBYTES] = [0; SYMBYTES];
         let mut t: [u128; NRUNS] = [0; NRUNS];
-        let mut a: [PolyVec; N] = [polyvec_init(); N];
+        let mut a: Matrix = [polyvec_init(); N];
         let mut s: PolyVec = polyvec_init();
         let mut start: Instant;
 
@@ -706,7 +739,15 @@ mod tests {
         start = Instant::now();
         for i in 0..NRUNS {
             t[i] = start.elapsed().as_nanos();
-            (skp, pkp) = kg(seed, true);
+            a = setup(true);
+        }
+        println!("setup (ns): ");
+        print_res_u128(&mut t);
+
+        start = Instant::now();
+        for i in 0..NRUNS {
+            t[i] = start.elapsed().as_nanos();
+            (skp, pkp) = kg(&a, true);
         }
         println!("keygen (ns): ");
         print_res_u128(&mut t);
