@@ -24,9 +24,9 @@ type Matrix = [PolyVec; N];
  * x Implement getnoise
  * x Compute BARR constant for barret reduction
  * x Implement polyvec_ntt
- * x Pre-compute a matrix
+ * x Pre-compute a matrix (a is in NTT domain)
  * x Pre-compute in Montgomery domain for fp_mul
- * - Implement schoolbook multiplication for testing
+ * x Implement schoolbook multiplication for testing
  * - Domain separation for XOF functions
  * - Integrate NIZK
  */

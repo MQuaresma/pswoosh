@@ -41,19 +41,27 @@ pub fn poly_toM(ap: &mut Poly) {
 }
 
 /*
- * Schoolbook multiplication in polynomials
-
+ * Schoolbook multiplication in polynomials (testing purposes only)
+ */
 fn schoolbook_mul(a: Poly, b: Poly) -> Poly {
     let mut c: Poly = poly_init();
-    let mut t: Elem = fp_init();
+    let mut t0: Elem;
+    let mut t1: Elem = fp_init();
 
     for i in 0..D {
         for j in 0..D {
-            fp_mul(&mut t, a[i], b[i]);
+            mul(&mut t1, a[i], b[j]);
+            t0 = c[(i+j) % D];
+            if 256 <= i + j {
+                sub(&mut c[(i+j) % D], t0, t1);
+            } else {
+                add(&mut c[(i+j) % D], t0, t1);
+            }
         }
     }
+
+    c
 }
- */
 
 /*
  * Base-multiplication in a polynomials
@@ -211,21 +219,12 @@ mod tests {
     fn test_poly_basemul() {
         let mut a: Poly = [QQ.clone(); D];
         let mut b: Poly = [[0x02, 0x0, 0x0, 0x0]; D];
-        let mut rc: Poly = poly_init();
-        let mut c: Poly = poly_init();
-        let mut base: Elem = [0xffffffffffffff00, 0xffffffffffffffff, 0xffffffffffffffff, 0x00000000003fffff];
-        let mut off: Elem = [0x7f, 0x0, 0x0, 0x0];
-        let one: Elem = [0x01, 0x0, 0x0, 0x0];
-        let mut t: Elem = fp_init();
+        let mut aM: Poly = a;
+        let mut c: Poly;
+        let mut rc: Poly;
 
-        for i in 0..128 {
-            rc[i] = off.clone();
-            rc[128 + i] = base.clone();
-            sub(&mut t, base, one);
-            base = t;
-            sub(&mut t, off, one);
-            off = t;
-        }
+        poly_toM(&mut aM);
+        rc = schoolbook_mul(aM, b);
 
         poly_ntt(&mut a);
         poly_ntt(&mut b);
