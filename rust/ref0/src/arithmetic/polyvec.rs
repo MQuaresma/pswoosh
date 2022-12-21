@@ -49,6 +49,18 @@ pub fn polyvec_invntt(a: &mut PolyVec) {
     }
 }
 
+pub fn polyvec_fromM(a: &mut PolyVec) {
+    for i in 0..N {
+        poly_fromM(&mut a[i]);
+    }
+}
+
+pub fn polyvec_toM(a: &mut PolyVec) {
+    for i in 0..N {
+        poly_toM(&mut a[i]);
+    }
+}
+
 pub fn polyvec_frombytes(a: &[u8; POLYVEC_BYTES]) -> PolyVec {
     let mut pv: PolyVec = polyvec_init();
 

@@ -22,13 +22,22 @@ pub fn poly_add(a: Poly, b: Poly) -> Poly {
     c
 }
 
+pub fn poly_fromM(ap: &mut Poly) {
+    let mut t: Elem = fp_init();
 
-pub fn poly_fromM(ap: Poly) -> Poly {
-    ap
+    for i in 0..D {
+        fromM(&mut t, ap[i]);
+        ap[i] = t;
+    }
 }
 
-pub fn poly_toM(ap: Poly) -> Poly {
-    ap
+pub fn poly_toM(ap: &mut Poly) {
+    let mut t: Elem = fp_init();
+
+    for i in 0..D {
+        toM(&mut t, ap[i]);
+        ap[i] = t;
+    }
 }
 
 /*
@@ -188,8 +197,8 @@ mod tests {
 
     #[test]
     fn test_poly_add() {
-        let a: Poly = [QQ.clone(); D];
-        let b: Poly = [HQ.clone(); D];
+        let mut a: Poly = [QQ.clone(); D];
+        let mut b: Poly = [HQ.clone(); D];
         let rc: Poly = [TQQ.clone(); D];
         let mut c: Poly = poly_init();
 
@@ -233,6 +242,7 @@ mod tests {
 
         poly_ntt(&mut b);
         poly_invntt(&mut b);
+        poly_fromM(&mut b);
 
         assert_eq!(a, b, "poly_ntt: polynomial vectors don't match");
     }

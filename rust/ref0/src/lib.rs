@@ -16,7 +16,7 @@ type Matrix = [PolyVec; N];
 
 /*
  * TODO:
- * x replaced hardcoded values with expressions
+ * x Replace hardcoded values with expressions
  * x Make rej_sampling constant time
  * x Implement gen_matrix
  * x Replace dummy code in XOF functions with call to library (RustCrypto)
@@ -24,11 +24,11 @@ type Matrix = [PolyVec; N];
  * x Implement getnoise
  * x Compute BARR constant for barret reduction
  * x Implement polyvec_ntt
- * - Integrate NIZK
+ * x Pre-compute a matrix
+ * x Pre-compute in Montgomery domain for fp_mul
  * - Implement schoolbook multiplication for testing
  * - Domain separation for XOF functions
- * - Pre-compute in Montgomery domain for fp_mul
- * x Pre-compute a matrix
+ * - Integrate NIZK
  */
 
 pub fn setup(f: bool) -> Matrix {
@@ -117,7 +117,6 @@ fn sdk(pk: &mut PolyVec, s: &mut PolyVec, r: Poly, f: bool) -> [u8; SYMBYTES] {
     }
 
     poly_invntt(&mut kv);
-
     kv = poly_add(kv, r);
 
     rec(&kv, &mut k);

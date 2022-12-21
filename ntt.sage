@@ -2,6 +2,7 @@
 
 q = 2**214-255
 z = 201672252035340054691925067809869273728229400462693823634312002
+r = 1121501860331520 # 2^(64*4) % q
 
 br7 = [  0,  64,  32,  96,  16,  80,  48, 112,   8,  72,  40, 104,  24,  88,  56, 120, 
          4,  68,  36, 100,  20,  84,  52, 116,  12,  76,  44, 108,  28,  92,  60, 124, 
@@ -14,21 +15,19 @@ br7 = [  0,  64,  32,  96,  16,  80,  48, 112,   8,  72,  40, 104,  24,  88,  56
 
 ''' Forward transform '''
 def forward_ntt():
-    for i in br7[:-1]:
-        zi = z**i % q
+    for i in br7:
+        zi = z**i*r % q
         x_zi = f"{zi:064x}"
         print("[0x{}, 0x{}, 0x{}, 0x{}],".format(x_zi[48:], x_zi[32:48], x_zi[16:32], x_zi[:16]))
-    zi = z**i % q
-    x_zi = f"{zi:064x}"
-    print("[0x{}, 0x{}, 0x{}, 0x{}]\n".format(x_zi[48:], x_zi[32:48], x_zi[16:32], x_zi[:16]))
+    print("")
 
 def inverse_ntt():
     for i in br7[:-1]:
-        zi = inverse_mod(z**(i+1), q)
+        zi = inverse_mod(z**(i+1), q) * r % q
         x_zi = f"{zi:064x}"
         print("[0x{}, 0x{}, 0x{}, 0x{}],".format(x_zi[48:], x_zi[32:48], x_zi[16:32], x_zi[:16]))
         
-    zi = inverse_mod(128, q)
+    zi = inverse_mod(128, q) * r * r % q
     x_zi = f"{zi:064x}"
     print("[0x{}, 0x{}, 0x{}, 0x{}]".format(x_zi[48:], x_zi[32:48], x_zi[16:32], x_zi[:16]))
 

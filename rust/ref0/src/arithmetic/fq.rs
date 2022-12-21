@@ -35,14 +35,8 @@ pub fn sub(c: &mut Elem, a: Elem, b: Elem) {
 }
 
 pub fn mul(c: &mut Elem, a: Elem, b: Elem) {
-    let aM: Elem = fp_init();
-    let bM: Elem = fp_init();
-    let cM: Elem = fp_init();
     unsafe {
-        fp_toM(aM.as_ptr(), a.as_ptr());
-        fp_toM(bM.as_ptr(), b.as_ptr());
-        fp_mul(cM.as_ptr(), aM.as_ptr(), bM.as_ptr());
-        fp_fromM(c.as_ptr(), cM.as_ptr());
+        fp_mul(c.as_ptr(), a.as_ptr(), b.as_ptr());
     }
 }
 
@@ -156,11 +150,17 @@ mod tests {
     #[test]
     fn test_fp_mul() {
         let a: Elem = QQ.clone();
+        let mut aM: Elem = fp_init();
         let b: Elem = [0x03, 0x0, 0x0, 0x0];
+        let mut bM: Elem = fp_init();
         let rc: Elem = TQQ.clone();
         let mut c: Elem = fp_init();
+        let mut cM: Elem = fp_init();
 
-        mul(&mut c, a, b); // q/4 * 3
+        toM(&mut aM, a);
+        toM(&mut bM, b);
+        mul(&mut cM, aM, bM); // q/4 * 3
+        fromM(&mut c, cM);
 
         assert_eq!(rc, c, "fp_mul: Values don't match");
     }
