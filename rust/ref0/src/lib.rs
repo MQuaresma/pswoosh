@@ -4,7 +4,7 @@ pub mod util;
 use std::arch::asm;
 use crate::arithmetic::{fq::*, poly::*, polyvec::*, params::*};
 use getrandom;
-use sha3::{Shake128, CShake128, digest::{Update, ExtendableOutput, XofReader}};
+use sha3::{CShake128, CShake128Core, digest::{Update, ExtendableOutput, XofReader}};
 
 const SYMBYTES: usize = 32;
 const NOISE_BYTES: usize = (N*D*2)/8;
@@ -27,7 +27,7 @@ type Matrix = [PolyVec; N];
  * x Pre-compute a matrix (a is in NTT domain)
  * x Pre-compute in Montgomery domain for fp_mul
  * x Implement schoolbook multiplication for testing
- * - Domain separation for XOF functions
+ * x Domain separation for XOF functions
  * - Integrate NIZK
  */
 
@@ -246,7 +246,8 @@ fn genoffset(inp: &[u8; POLYVEC_BYTES * 2]) -> Poly {
     let mut buf: [u8; RATE] = [0; RATE];
     let mut r: Poly = poly_init();
     let mut ctr: usize = 0;
-    let mut xof = Shake128::default();
+    let mut ds: [u8; 1] = [0x2];
+    let mut xof: CShake128 = CShake128::from_core(CShake128Core::new(&ds));
     let mut rxof;
 
     xof.update(inp);
@@ -272,7 +273,7 @@ fn cbd(buf: &[u8; NOISE_BYTES], p: &mut PolyVec) {
     let mut m: u64;
 
     for i in 0..N {
-        for j in 0..D/4 { //CHECK ME
+        for j in 0..D/4 {
             c = buf[i*D/4+j];
             for k in 0..4 {
                 t = c & 0x3;
@@ -309,7 +310,8 @@ fn getnoise(seed: &[u8; SYMBYTES], nonce: u8) -> PolyVec {
     let mut inp: [u8; SYMBYTES + 1] = [0; SYMBYTES + 1];
     let mut buf: [u8; NOISE_BYTES] = [0; NOISE_BYTES];
     let mut p: PolyVec = polyvec_init();
-    let mut xof = Shake128::default();
+    let mut ds: [u8; 2] = [0x1, nonce];
+    let mut xof: CShake128 = CShake128::from_core(CShake128Core::new(&ds));
     let mut rxof;
 
     inp[..SYMBYTES].copy_from_slice(seed);
@@ -344,7 +346,8 @@ fn genmatrix(seed: &[u8; SYMBYTES], t: bool) -> Matrix {
     let mut buf: [u8; RATE] = [0; RATE];
     let mut a: Matrix = [polyvec_init(); N];
     let mut ctr: usize;
-    let mut xof = Shake128::default();
+    let ds: [u8; 1] = [0x0];
+    let mut xof: CShake128 = CShake128::from_core(CShake128Core::new(&ds));
     let mut rxof;
 
     xof.update(seed);
