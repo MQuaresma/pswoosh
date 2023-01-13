@@ -107,3 +107,42 @@ median: 174556958
 skey_deriv (cycles): 
 average: 25133581
 median: 25378106
+
+# Opt 3 - Store s in NTT domain
+---- tests::speed_full stdout ----
+genmatrix (cycles): 
+average: 329440747
+median: 332560176
+
+getnoise (cycles): 
+average: 109681
+median: 109598
+
+genoffset (cycles): 
+average: 4869252
+median: 4915458
+
+poly_ntt (cycles):
+average: 232659
+median: 234870
+
+poly_invntt (cycles):
+average: 277459
+median: 280100
+
+polyvec_basemul_acc (cycles): 
+average: 4561045
+median: 4597134
+
+setup (cycles): 
+average: 328913653
+median: 332155620
+
+keygen (cycles): 
+average: 163752396
+median: 165356190
+
+skey_deriv (cycles): 
+average: 17635533
+median: 17808042
+

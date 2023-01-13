@@ -63,12 +63,7 @@ fn kg(a: &Matrix, f: bool) -> ([u8; SECRETKEY_BYTES], [u8; PUBLICKEY_BYTES]) {
     nonce += 1;
     let mut e: PolyVec = getnoise(&noiseseed, nonce);
 
-    let pk: PolyVec =
-        if f {
-            gen_pkl(a, &mut s, &mut e)
-        } else {
-            gen_pkr(a, &mut s, &mut e)
-        };
+    let pk: PolyVec = gen_pk(a, &mut s, &mut e);
 
     skv = polyvec_tobytes(s);
     pkv = polyvec_tobytes(pk);
@@ -106,7 +101,6 @@ fn sdk(pk: &mut PolyVec, s: &mut PolyVec, r: Poly, f: bool) -> [u8; SYMBYTES] {
     let mut k: [u8; SYMBYTES] = [0; SYMBYTES];
 
     polyvec_ntt(pk);
-    polyvec_ntt(s);
 
     if !f {
         // pk * s
@@ -149,52 +143,7 @@ fn gen_pk(a: &Matrix, s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
     }
 
     polyvec_invntt(&mut tmp);
-    polyvec_invntt(s);
 
-    let pk: PolyVec = polyvec_add(tmp, *e);
-
-    pk
-}
-
-/*
- * Generates a public key from matrix A, secret and error vector: sT * A + eT
- */
-fn gen_pkl(a: &Matrix, s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
-    let mut tmp: PolyVec = polyvec_init();
-
-    polyvec_ntt(s);
-
-    // tmp = sT * A
-    for i in 0..N {
-        tmp[i] = polyvec_basemul_acc(*s, a[i]);
-    }
-
-    polyvec_invntt(&mut tmp);
-    polyvec_invntt(s);
-
-    // pk = (sT * A) + eT
-    let pk: PolyVec = polyvec_add(tmp, *e);
-
-    pk
-}
-
-/*
- * Generates a public key from matrix A, secret and error vector: A * s + e
- */
-fn gen_pkr(a: &Matrix, s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
-    let mut tmp: PolyVec = polyvec_init();
-
-    polyvec_ntt(s);
-
-    // tmp = A * s
-    for i in 0..N {
-        tmp[i] = polyvec_basemul_acc(a[i], *s);
-    }
-
-    polyvec_invntt(&mut tmp);
-    polyvec_invntt(s);
-
-    // pk = (A * s) + e
     let pk: PolyVec = polyvec_add(tmp, *e);
 
     pk
