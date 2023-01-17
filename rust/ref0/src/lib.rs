@@ -310,6 +310,28 @@ fn getnoise(seed: &[u8; SYMBYTES], nonce: u8) -> PolyVec {
     p
 }
 
+fn getnoise_spec(seed: &[u8; SYMBYTES], nonce: u8) -> PolyVec {
+    let mut inp: [u8; SYMBYTES + 1] = [0; SYMBYTES + 1];
+    let mut buf: [u8; NOISE_BYTES] = [0; NOISE_BYTES];
+    let mut p: PolyVec = polyvec_init();
+    let mut ds: [u8; 2] = [0x1, nonce];
+    let mut xof: CShake128 = CShake128::from_core(CShake128Core::new(&ds));
+    let mut rxof;
+
+    inp[..SYMBYTES].copy_from_slice(seed);
+    inp[SYMBYTES] = nonce;
+
+    xof.update(&inp);
+    rxof = xof.finalize_xof();
+
+    rxof.read(&mut buf);
+
+    cbd_spec(&buf, &mut p);
+
+    p
+}
+
+
 /*
  * Transpose matrix (testing purposes only)
  */
@@ -564,6 +586,13 @@ mod tests {
             a = genmatrix(&seed, false);
         }
         println!("genmatrix (cycles): ");
+        print_res(&mut t);
+
+        for i in 0..NRUNS {
+            t[i] = rdtsc();
+            s = getnoise_spec(&mut seed, 0);
+        }
+        println!("getnoise_spec (cycles): ");
         print_res(&mut t);
 
         for i in 0..NRUNS {
