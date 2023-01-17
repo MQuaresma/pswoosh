@@ -1,6 +1,6 @@
 use core::arch::x86_64;
 
-pub const NRUNS: usize = 100;
+pub const NRUNS: usize = 10000;
 
 fn median_u128(t: &mut [u128; NRUNS]) -> u128 {
     t.sort();

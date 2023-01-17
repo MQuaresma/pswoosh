@@ -11,4 +11,4 @@ sha3 = "0.10.6"
 
 [profile.test]
 opt-level = 3            # Optimization level.
-debug = true             # Include debug info.
+target-cpu = "native"
