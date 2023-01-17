@@ -243,11 +243,45 @@ fn cbd(buf: &[u8; NOISE_BYTES], p: &mut PolyVec) {
 
                 /* Note:
                  * -1 = (Q-1) mod Q
-                 * Q's last bit is always set, so setting last bit to 0 is equivalent
+                 * Q's first bit is always set, so setting it to 0 is equivalent
                  * to subtracting one
                  */
                 m = (t & 0x1) as u64;
                 p[i][4*j + k][0] ^= m;
+
+                c >>= 2;
+            }
+        }
+    }
+}
+
+/*
+ * Samples ternary noise, from a centered binomial distribution, according to spec with:
+ * - 25%: -1 (01)
+ * - 50%: 0  (00, 11)
+ * - 25%: 1  (10)
+ */
+fn cbd_spec(buf: &[u8; NOISE_BYTES], p: &mut PolyVec) {
+    let mut c: u8;
+    let mut t: u8;
+    let mut a0: u64;
+    let mut b0: u64;
+    let mut a: Elem;
+    let mut b: Elem;
+
+    for i in 0..N {
+        for j in 0..D/4 {
+            c = buf[i*D/4+j];
+            for k in 0..4 {
+                t = c & 0x1;
+                a0 = t as u64;
+                t = (c & 0x2) >> 1;
+                b0 = t as u64;
+
+                a = [a0, 0x0, 0x0, 0x0];
+                b = [b0, 0x0, 0x0, 0x0];
+
+                sub(&mut p[i][4*j + k], a, b);
 
                 c >>= 2;
             }
