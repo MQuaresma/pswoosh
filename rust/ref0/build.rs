@@ -7,6 +7,7 @@ fn main() {
         .file("../../aesenc-int/aesenc-int.c")
         .flag("-march=native")
         .flag("-fomit-frame-pointer")
+        .flag("-Wno-unused-function")
         .flag("-fwrapv")
         .flag("-fPIC")
         .flag("-fPIE")
