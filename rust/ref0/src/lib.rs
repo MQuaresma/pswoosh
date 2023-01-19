@@ -289,10 +289,8 @@ fn cbd_spec(buf: &[u8; NOISE_BYTES], p: &mut PolyVec) {
     }
 }
 
-fn getnoise(seed: &[u8; SYMBYTES], nonce: u8) -> PolyVec {
+fn expand_seed(seed: &[u8; SYMBYTES], nonce: u8, buf: &mut [u8; NOISE_BYTES]) {
     let mut inp: [u8; SYMBYTES + 1] = [0; SYMBYTES + 1];
-    let mut buf: [u8; NOISE_BYTES] = [0; NOISE_BYTES];
-    let mut p: PolyVec = polyvec_init();
     let mut ds: [u8; 2] = [0x1, nonce];
     let mut xof: CShake128 = CShake128::from_core(CShake128Core::new(&ds));
     let mut rxof;
@@ -303,7 +301,14 @@ fn getnoise(seed: &[u8; SYMBYTES], nonce: u8) -> PolyVec {
     xof.update(&inp);
     rxof = xof.finalize_xof();
 
-    rxof.read(&mut buf);
+    rxof.read(buf);
+}
+
+fn getnoise(seed: &[u8; SYMBYTES], nonce: u8) -> PolyVec {
+    let mut buf: [u8; NOISE_BYTES] = [0; NOISE_BYTES];
+    let mut p: PolyVec = polyvec_init();
+
+    expand_seed(seed, nonce, &mut buf);
 
     cbd(&buf, &mut p);
 
@@ -539,38 +544,13 @@ mod tests {
 
     #[test]
     fn speed_nike() {
-        let mut seed: [u8; SYMBYTES] = [0; SYMBYTES];
-        let mut a: Matrix = [polyvec_init(); N];
-        let mut pkp: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
-        let mut skp: [u8; SECRETKEY_BYTES] = [0; SECRETKEY_BYTES];
-        let mut ss: [u8; SYMBYTES] = [0; SYMBYTES];
-        let mut t: [u64; NRUNS] = [0; NRUNS];
 
-        for i in 0..NRUNS {
-            t[i] = rdtsc();
-            a = setup(true);
-        }
-        println!("setup (cycles): ");
-        print_res(&mut t);
-
-        for i in 0..NRUNS {
-            t[i] = rdtsc();
-            (skp, pkp) = kg(&a, true);
-        }
-        println!("keygen (cycles): ");
-        print_res(&mut t);
-
-        for i in 0..NRUNS {
-            t[i] = rdtsc();
-            ss = skey_deriv(pkp, pkp, skp, true);
-        }
-        println!("skey_deriv (cycles): ");
-        print_res(&mut t);
     }
 
     #[test]
     fn speed_full() {
         let mut seed: [u8; SYMBYTES] = [0; SYMBYTES];
+        let mut buf: [u8; NOISE_BYTES] = [0; NOISE_BYTES];
         let mut pkp: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
         let mut skp: [u8; SECRETKEY_BYTES] = [0; SECRETKEY_BYTES];
         let mut rin: [u8; POLYVEC_BYTES * 2] = [0; POLYVEC_BYTES * 2];
@@ -600,6 +580,13 @@ mod tests {
             s = getnoise(&mut seed, 0);
         }
         println!("getnoise (cycles): ");
+        print_res(&mut t);
+
+        for i in 0..NRUNS {
+            t[i] = rdtsc();
+            expand_seed(&seed, 0, &mut buf);
+        }
+        println!("expand_seed (cycles): ");
         print_res(&mut t);
 
         for i in 0..NRUNS {
