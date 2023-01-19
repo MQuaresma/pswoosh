@@ -1,18 +1,18 @@
-mod arithmetic;
+pub mod arithmetic;
 pub mod util;
 
 use std::arch::asm;
-use crate::arithmetic::{fq::*, poly::*, polyvec::*, params::*};
+pub (in crate) use crate::arithmetic::{fq::*, poly::*, polyvec::*, params::*};
 use getrandom;
 use sha3::{CShake128, CShake128Core, digest::{Update, ExtendableOutput, XofReader}};
 
-const SYMBYTES: usize = 32;
-const NOISE_BYTES: usize = (N*D*2)/8;
-const PUBLICKEY_BYTES: usize = POLYVEC_BYTES;
-const SECRETKEY_BYTES: usize = POLYVEC_BYTES;
+pub const SYMBYTES: usize = 32;
+pub const PUBLICKEY_BYTES: usize = POLYVEC_BYTES;
+pub const SECRETKEY_BYTES: usize = POLYVEC_BYTES;
+pub const NOISE_BYTES: usize = (N*D*2)/8;
 const RATE: usize = 136;
 
-type Matrix = [PolyVec; N];
+pub type Matrix = [PolyVec; N];
 
 /*
  * TODO:
@@ -31,7 +31,7 @@ type Matrix = [PolyVec; N];
  * - Integrate NIZK
  */
 
-pub fn setup(f: bool) -> Matrix {
+fn setup(f: bool) -> Matrix {
     let mut seed: [u8; SYMBYTES] = [0; SYMBYTES];
     getrandom::getrandom(&mut seed).expect("getrandom failed");
 
@@ -92,6 +92,11 @@ pub fn skey_deriv(pkp1: [u8; PUBLICKEY_BYTES], pkp2: [u8; PUBLICKEY_BYTES], skp:
 
     sdk(&mut pk, &mut s, r, f)
 }
+
+pub fn matrix_init() -> Matrix {
+    [polyvec_init(); N]
+}
+
 
 /*
  * Shared key derivation
@@ -191,7 +196,7 @@ fn rej_sampling(buf: &[u8; RATE], p: &mut Poly, mut offset: usize) -> usize {
 }
 
 
-fn genoffset(inp: &[u8; POLYVEC_BYTES * 2]) -> Poly {
+pub fn genoffset(inp: &[u8; POLYVEC_BYTES * 2]) -> Poly {
     let mut buf: [u8; RATE] = [0; RATE];
     let mut r: Poly = poly_init();
     let mut ctr: usize = 0;
@@ -289,7 +294,7 @@ fn cbd_spec(buf: &[u8; NOISE_BYTES], p: &mut PolyVec) {
     }
 }
 
-fn expand_seed(seed: &[u8; SYMBYTES], nonce: u8, buf: &mut [u8; NOISE_BYTES]) {
+pub fn expand_seed(seed: &[u8; SYMBYTES], nonce: u8, buf: &mut [u8; NOISE_BYTES]) {
     let mut inp: [u8; SYMBYTES + 1] = [0; SYMBYTES + 1];
     let mut ds: [u8; 2] = [0x1, nonce];
     let mut xof: CShake128 = CShake128::from_core(CShake128Core::new(&ds));
@@ -304,7 +309,7 @@ fn expand_seed(seed: &[u8; SYMBYTES], nonce: u8, buf: &mut [u8; NOISE_BYTES]) {
     rxof.read(buf);
 }
 
-fn getnoise(seed: &[u8; SYMBYTES], nonce: u8) -> PolyVec {
+pub fn getnoise(seed: &[u8; SYMBYTES], nonce: u8) -> PolyVec {
     let mut buf: [u8; NOISE_BYTES] = [0; NOISE_BYTES];
     let mut p: PolyVec = polyvec_init();
 
@@ -315,7 +320,7 @@ fn getnoise(seed: &[u8; SYMBYTES], nonce: u8) -> PolyVec {
     p
 }
 
-fn getnoise_spec(seed: &[u8; SYMBYTES], nonce: u8) -> PolyVec {
+pub fn getnoise_spec(seed: &[u8; SYMBYTES], nonce: u8) -> PolyVec {
     let mut inp: [u8; SYMBYTES + 1] = [0; SYMBYTES + 1];
     let mut buf: [u8; NOISE_BYTES] = [0; NOISE_BYTES];
     let mut p: PolyVec = polyvec_init();
@@ -352,7 +357,7 @@ fn transpose(a: &[PolyVec;N], at: &mut Matrix) {
  * Generates matrix A from a seed
  * - t => generate A^T
  */
-fn genmatrix(seed: &[u8; SYMBYTES], t: bool) -> Matrix {
+pub fn genmatrix(seed: &[u8; SYMBYTES], t: bool) -> Matrix {
     let mut buf: [u8; RATE] = [0; RATE];
     let mut a: Matrix = [polyvec_init(); N];
     let mut ctr: usize;
@@ -615,13 +620,6 @@ mod tests {
             s[i % N] = polyvec_basemul_acc(a[i % N], a[(i + 1) % N]);
         }
         println!("polyvec_basemul_acc (cycles): ");
-        print_res(&mut t);
-
-        for i in 0..NRUNS {
-            t[i] = rdtsc();
-            a = setup(true);
-        }
-        println!("setup (cycles): ");
         print_res(&mut t);
 
         for i in 0..NRUNS {

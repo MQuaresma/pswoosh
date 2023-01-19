@@ -3,6 +3,18 @@ name = "ref0"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "bench_full"
+path = "src/bin/bench_full.rs"
+
+[[bin]]
+name = "bench_scheme"
+path = "src/bin/bench_scheme.rs"
+
+[[bin]]
+name = "swoosh"
+path = "src/bin/swoosh.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -12,3 +24,8 @@ sha3 = "0.10.6"
 [profile.test]
 opt-level = 3            # Optimization level.
 target-cpu = "native"
+
+[profile.dev]
+opt-level = 3            # Optimization level.
+target-cpu = "native"
+
