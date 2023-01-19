@@ -146,3 +146,49 @@ skey_deriv (cycles):
 average: 17635533
 median: 17808042
 
+
+# Opt 4 - Use AES256-CTR for seed expansion
+---- tests::speed_full stdout ----
+genmatrix (cycles): 
+average: 324692899
+median: 324344190
+
+getnoise_spec (cycles): 
+average: 420285
+median: 419140
+
+getnoise (cycles): 
+average: 89855
+median: 89664
+
+expand_seed (cycles): 
+average: 26704
+median: 26608
+
+expand_seed_aes (cycles): 
+average: 2222
+median: 2220
+
+genoffset (cycles): 
+average: 4921351
+median: 4917342
+
+poly_ntt (cycles):
+average: 236805
+median: 236660
+
+poly_invntt (cycles):
+average: 282317
+median: 282088
+
+polyvec_basemul_acc (cycles): 
+average: 4586697
+median: 4580344
+
+keygen (cycles): 
+average: 165629988
+median: 165127978
+
+skey_deriv (cycles): 
+average: 17827109
+median: 17802464
