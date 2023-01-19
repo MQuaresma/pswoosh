@@ -9,7 +9,7 @@ fn main() {
     let mut ss: [u8; SYMBYTES] = [0; SYMBYTES];
     let mut t: [u64; NRUNS] = [0; NRUNS];
 
-   for i in 0..NRUNS {
+    for i in 0..NRUNS {
         t[i] = rdtsc();
         (skp, pkp) = keygen(&a, true);
     }

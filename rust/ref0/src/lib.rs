@@ -31,7 +31,7 @@ pub type Matrix = [PolyVec; N];
  * - Integrate NIZK
  */
 
-fn setup(f: bool) -> Matrix {
+pub fn setup(f: bool) -> Matrix {
     let mut seed: [u8; SYMBYTES] = [0; SYMBYTES];
     getrandom::getrandom(&mut seed).expect("getrandom failed");
 

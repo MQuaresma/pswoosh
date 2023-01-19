@@ -11,12 +11,6 @@ path = "src/bin/bench_full.rs"
 name = "bench_scheme"
 path = "src/bin/bench_scheme.rs"
 
-[[bin]]
-name = "swoosh"
-path = "src/bin/swoosh.rs"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 getrandom = "0.2.7"
 sha3 = "0.10.6"
@@ -29,6 +23,10 @@ opt-level = 3            # Optimization level.
 target-cpu = "native"
 
 [profile.dev]
+opt-level = 3            # Optimization level.
+target-cpu = "native"
+
+[profile.release]
 opt-level = 3            # Optimization level.
 target-cpu = "native"
 
