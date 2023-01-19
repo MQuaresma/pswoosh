@@ -38,9 +38,16 @@ fn main() {
 
     for i in 0..NRUNS {
         t[i] = rdtsc();
-        expand_seed(&seed, 0, &mut buf);
+        expand_seed(&seed, (i % 256) as u8, &mut buf);
     }
     println!("expand_seed (cycles): ");
+    print_res(&mut t);
+
+    for i in 0..NRUNS {
+        t[i] = rdtsc();
+        expand_seed_aes(&seed, (i % 256) as u8, &mut buf);
+    }
+    println!("expand_seed_aes (cycles): ");
     print_res(&mut t);
 
     for i in 0..NRUNS {

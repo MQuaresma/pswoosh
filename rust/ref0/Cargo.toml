@@ -21,6 +21,9 @@ path = "src/bin/swoosh.rs"
 getrandom = "0.2.7"
 sha3 = "0.10.6"
 
+[build-dependencies]
+cc = "1.0.78"
+
 [profile.test]
 opt-level = 3            # Optimization level.
 target-cpu = "native"

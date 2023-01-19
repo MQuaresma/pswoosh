@@ -309,11 +309,29 @@ pub fn expand_seed(seed: &[u8; SYMBYTES], nonce: u8, buf: &mut [u8; NOISE_BYTES]
     rxof.read(buf);
 }
 
+extern {
+    fn crypto_stream(out: *const u8, outlen: usize, n: *const u8, k: *const u8);
+}
+
+// TODO: CHECK THIS
+pub fn expand_seed_aes(seed: &[u8; SYMBYTES], ctr: u8, buf: &mut [u8; NOISE_BYTES]) {
+    let mut ds: [u8; 16] = [0; 16];
+
+    ds[0] = 0x1;
+    ds[1] = ctr;
+
+    assert_eq!(SYMBYTES, 32, "Seed must be at least 32 bytes");
+
+    unsafe {
+        crypto_stream(buf.as_ptr(), NOISE_BYTES, ds.as_ptr(), seed.as_ptr());
+    }
+}
+
 pub fn getnoise(seed: &[u8; SYMBYTES], nonce: u8) -> PolyVec {
     let mut buf: [u8; NOISE_BYTES] = [0; NOISE_BYTES];
     let mut p: PolyVec = polyvec_init();
 
-    expand_seed(seed, nonce, &mut buf);
+    expand_seed_aes(seed, nonce, &mut buf);
 
     cbd(&buf, &mut p);
 
