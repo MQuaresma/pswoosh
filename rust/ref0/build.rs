@@ -4,7 +4,7 @@ fn main() {
     Command::new("make").args(["-C","src/arithmetic", "clean"]).status().unwrap();
     Command::new("make").args(["-C","src/arithmetic"]).status().unwrap();
     cc::Build::new()
-        .file("../../aesenc-int/aesenc-int.c")
+        .file("../../supercop-20221122_crypto_stream_aes256ctr_dolbeau_aesenc-int/aesenc-int.c")
         .flag("-march=native")
         .flag("-fomit-frame-pointer")
         .flag("-Wno-unused-function")
