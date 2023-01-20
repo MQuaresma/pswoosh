@@ -4,7 +4,7 @@ pub mod util;
 use std::arch::asm;
 pub (in crate) use crate::arithmetic::{fq::*, poly::*, polyvec::*, params::*};
 use getrandom;
-use sha3::{CShake128, CShake128Core, digest::{Update, ExtendableOutput, XofReader}};
+use sha3::{CShake128, CShake128Core, CShake256, CShake256Core, digest::{Update, ExtendableOutput, XofReader}};
 
 pub const SYMBYTES: usize = 32;
 pub const PUBLICKEY_BYTES: usize = POLYVEC_BYTES;
@@ -105,8 +105,6 @@ fn sdk(pk: &mut PolyVec, s: &mut PolyVec, r: Poly, f: bool) -> [u8; SYMBYTES] {
     let mut kv: Poly;
     let mut k: [u8; SYMBYTES] = [0; SYMBYTES];
 
-    polyvec_ntt(pk);
-
     if !f {
         // pk * s
         kv = polyvec_basemul_acc(*pk, *s)
@@ -142,12 +140,11 @@ fn gen_pk(a: &Matrix, s: &mut PolyVec, e: &mut PolyVec) -> PolyVec {
     let mut tmp: PolyVec = polyvec_init();
 
     polyvec_ntt(s);
+    polyvec_ntt(e);
 
     for i in 0..N {
         tmp[i] = polyvec_basemul_acc(a[i], *s);
     }
-
-    polyvec_invntt(&mut tmp);
 
     let pk: PolyVec = polyvec_add(tmp, *e);
 
@@ -201,7 +198,7 @@ pub fn genoffset(inp: &[u8; POLYVEC_BYTES * 2]) -> Poly {
     let mut r: Poly = poly_init();
     let mut ctr: usize = 0;
     let mut ds: [u8; 1] = [0x2];
-    let mut xof: CShake128 = CShake128::from_core(CShake128Core::new(&ds));
+    let mut xof: CShake256 = CShake256::from_core(CShake256Core::new(&ds));
     let mut rxof;
 
     xof.update(inp);
