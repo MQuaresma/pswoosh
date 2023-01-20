@@ -16,23 +16,6 @@ const RATE: usize = 136;
 
 pub type Matrix = [PolyVec; N];
 
-/*
- * TODO:
- * x Replace hardcoded values with expressions
- * x Make rej_sampling constant time
- * x Implement gen_matrix
- * x Replace dummy code in XOF functions with call to library (RustCrypto)
- * x Fix cmp in fq.rs
- * x Implement getnoise
- * x Compute BARR constant for barret reduction
- * x Implement polyvec_ntt
- * x Pre-compute a matrix (a is in NTT domain)
- * x Pre-compute in Montgomery domain for fp_mul
- * x Implement schoolbook multiplication for testing
- * x Domain separation for XOF functions
- * - Integrate NIZK
- */
-
 fn setup(f: bool) -> Matrix {
     let mut seed: [u8; SYMBYTES] = [0; SYMBYTES];
     getrandom::getrandom(&mut seed).expect("getrandom failed");
@@ -312,7 +295,6 @@ extern {
     fn crypto_stream(out: *const u8, outlen: usize, n: *const u8, k: *const u8);
 }
 
-// TODO: CHECK THIS
 pub fn expand_seed_aes(seed: &[u8; SYMBYTES], ctr: u8, buf: &mut [u8; NOISE_BYTES]) {
     let mut ds: [u8; 16] = [0; 16];
 
