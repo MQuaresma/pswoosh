@@ -1,4 +1,5 @@
 use ref0::*;
+use ref0::sysA::*;
 use ref0::{util::*, arithmetic::{poly::*, polyvec::*, params::*}};
 use getrandom;
 
@@ -6,7 +7,6 @@ fn main() {
     let mut seed: [u8; SYMBYTES] = [0; SYMBYTES];
     let mut buf: [u8; NOISE_BYTES] = [0; NOISE_BYTES];
     let rin: [u8; POLYVEC_BYTES * 2] = [0; POLYVEC_BYTES * 2];
-    let mut a: Matrix = matrix_init();
     let mut pkp: [u8; PUBLICKEY_BYTES] = [0; PUBLICKEY_BYTES];
     let mut skp: [u8; SECRETKEY_BYTES] = [0; SECRETKEY_BYTES];
     let mut ss: [u8; SYMBYTES] = [0; SYMBYTES];
@@ -14,13 +14,6 @@ fn main() {
     let mut s: PolyVec = polyvec_init();
 
     getrandom::getrandom(&mut seed).expect("getrandom failed");
-
-    for i in 0..NRUNS {
-        t[i] = rdtsc();
-        a = genmatrix(&seed, false);
-    }
-    println!("genmatrix (cycles): ");
-    print_res(&mut t);
 
     for i in 0..NRUNS {
         t[i] = rdtsc();
@@ -73,21 +66,21 @@ fn main() {
 
     for i in 0..NRUNS {
         t[i] = rdtsc();
-        s[i % N] = polyvec_basemul_acc(a[i % N], a[(i + 1) % N]);
+        s[i % N] = polyvec_basemul_acc(A[i % N], A[(i + 1) % N]);
     }
     println!("polyvec_basemul_acc (cycles): ");
     print_res(&mut t);
 
     for i in 0..NRUNS {
         t[i] = rdtsc();
-        (skp, pkp) = keygen(&a, true);
+        (skp, pkp) = keygen(&A, true);
     }
     println!("keygen (cycles): ");
     print_res(&mut t);
 
     for i in 0..NRUNS {
         t[i] = rdtsc();
-        ss = skey_deriv(pkp, pkp, skp, true);
+        ss = skey_deriv(&pkp, &pkp, &skp, true);
     }
     println!("skey_deriv (cycles): ");
     print_res(&mut t);
