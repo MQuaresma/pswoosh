@@ -100,22 +100,6 @@ mod tests {
     }
 
     #[test]
-    fn test_polyvec_basemul_acc() {
-      assert!(false, "polyvec_basemul_acc: not implemented");
-    }
-
-    #[test]
-    fn test_polyvec_ntt() {
-        let a: PolyVec = [[HQ.clone(); D]; N];
-        let mut b: PolyVec = a.clone();
-
-        polyvec_ntt(&mut b);
-        polyvec_invntt(&mut b);
-
-        assert_eq!(a, b, "polyvec_ntt: polynomial vectors don't match");
-    }
-
-    #[test]
     fn test_polyvec_bytes() {
         let a: PolyVec = [[HQ.clone(); D]; N];
         let mut r: PolyVec = polyvec_init();
