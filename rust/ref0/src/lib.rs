@@ -16,6 +16,10 @@ const RATE: usize = 136;
 
 pub type Matrix = [PolyVec; N];
 
+pub fn matrix_init() -> Matrix {
+    [polyvec_init(); N]
+}
+
 fn setup(f: bool) -> Matrix {
     let mut seed: [u8; SYMBYTES] = [0; SYMBYTES];
     getrandom::getrandom(&mut seed).expect("getrandom failed");
@@ -28,7 +32,7 @@ fn setup(f: bool) -> Matrix {
 /*
  * Key generation wrapper
  */
-pub fn keygen(a: &Matrix, f:bool) -> ([u8; SECRETKEY_BYTES], [u8; PUBLICKEY_BYTES]) {
+pub fn pswoosh_keygen(a: &Matrix, f:bool) -> ([u8; SECRETKEY_BYTES], [u8; PUBLICKEY_BYTES]) {
     kg(a, f)
 }
 
@@ -60,7 +64,7 @@ fn kg(a: &Matrix, f: bool) -> ([u8; SECRETKEY_BYTES], [u8; PUBLICKEY_BYTES]) {
 /*
  * Key derivation wrapper to deserialize the vectors of polynomials
  */
-pub fn skey_deriv(pkp1: &[u8; PUBLICKEY_BYTES], pkp2: &[u8; PUBLICKEY_BYTES], skp: &[u8; SECRETKEY_BYTES], f: bool) -> [u8; SYMBYTES] {
+pub fn pswoosh_skey_deriv(pkp1: &[u8; PUBLICKEY_BYTES], pkp2: &[u8; PUBLICKEY_BYTES], skp: &[u8; SECRETKEY_BYTES], f: bool) -> [u8; SYMBYTES] {
     let mut pk: PolyVec = polyvec_frombytes(pkp2);
     let mut s: PolyVec = polyvec_frombytes(skp);
     let mut rin: [u8; POLYVEC_BYTES * 2] = [0; POLYVEC_BYTES * 2];
@@ -77,11 +81,6 @@ pub fn skey_deriv(pkp1: &[u8; PUBLICKEY_BYTES], pkp2: &[u8; PUBLICKEY_BYTES], sk
 
     sdk(&mut pk, &mut s, r, f)
 }
-
-pub fn matrix_init() -> Matrix {
-    [polyvec_init(); N]
-}
-
 
 /*
  * Shared key derivation
