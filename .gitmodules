@@ -1,0 +1,3 @@
+[submodule "libjbn"]
+	path = libjbn
+	url = https://github.com/formosa-crypto/libjbn.git
