@@ -2,4 +2,4 @@
 Swoosh is a pratical lattice-based NIKE.
 Passive-Swoosh is the passively-secure construction used in Swoosh.
 
-For more information check: <link e-print here>.
+For more information check: https://eprint.iacr.org/2023/271.
