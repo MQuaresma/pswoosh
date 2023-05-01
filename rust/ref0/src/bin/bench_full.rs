@@ -73,14 +73,14 @@ fn main() {
 
     for i in 0..NRUNS {
         t[i] = rdtsc();
-        (skp, pkp) = keygen(&A, true);
+        (skp, pkp) = pswoosh_keygen(&A, true);
     }
     println!("keygen (cycles): ");
     print_res(&mut t);
 
     for i in 0..NRUNS {
         t[i] = rdtsc();
-        ss = skey_deriv(&pkp, &pkp, &skp, true);
+        ss = pswoosh_skey_deriv(&pkp, &pkp, &skp, true);
     }
     println!("skey_deriv (cycles): ");
     print_res(&mut t);
