@@ -413,8 +413,8 @@ mod tests {
 
         (sk1, pk1) = kg(&A, true);
         (sk2, pk2) = kg(&At, false);
-        ss1 = skey_deriv(&pk1, &pk2, &sk1, true);
-        ss2 = skey_deriv(&pk2, &pk1, &sk2, false);
+        ss1 = pswoosh_skey_deriv(&pk1, &pk2, &sk1, true);
+        ss2 = pswoosh_skey_deriv(&pk2, &pk1, &sk2, false);
 
         assert_eq!(ss1, ss2, "ERROR: shared secrets don't match!");
     }
